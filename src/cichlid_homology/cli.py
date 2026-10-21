@@ -79,6 +79,28 @@ def _survey(args) -> int:
     return 0
 
 
+def _survey2(args) -> int:
+    from cichlid_data import Catalog, get_layout
+    from cichlid_data.clades import Clades
+    from .survey2 import survey_part
+
+    layout = get_layout()
+    cat = Catalog.load(layout)
+    clades = Clades.load()
+    report = {"cichlid_homology": __version__, "species": args.species}
+    for part in ("TreeFam", "Compara"):
+        try:
+            report[part] = survey_part(layout, cat, clades, part, args.species, args.n, args.n_denovo)
+        except Exception:
+            import traceback
+            report[part] = {"error": traceback.format_exc()}
+    text = json.dumps(report, indent=1, default=str)
+    if args.out:
+        Path(args.out).expanduser().write_text(text)
+    print(text)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="cichlid-homology")
     ap.add_argument("--version", action="version", version=__version__)
@@ -88,6 +110,12 @@ def main(argv=None) -> int:
     s.add_argument("--n", type=int, default=300)
     s.add_argument("--out", default=None)
     s.set_defaults(func=_survey)
+    s2 = sub.add_parser("survey2", help="species of leaves, shadowed leaves, coverage, support, fusions")
+    s2.add_argument("--species", default="Mzeb")
+    s2.add_argument("--n", type=int, default=300)
+    s2.add_argument("--n-denovo", type=int, default=100)
+    s2.add_argument("--out", default=None)
+    s2.set_defaults(func=_survey2)
     args = ap.parse_args(argv)
     return args.func(args)
 
