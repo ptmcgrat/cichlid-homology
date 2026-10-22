@@ -1,0 +1,35 @@
+"""All per-gene calls on one rooted tree (pure; no coordinator needed)."""
+from __future__ import annotations
+
+from .dating import Params, birth_of_copy, date_node, level_of_species
+from .orthology import RTree, relationship, teleost_pattern
+from .tree import Node
+
+REFS = {"human": "homo_sapiens", "zebrafish": "danio_rerio"}
+
+
+def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str, prefixes) -> dict:
+    row = {"parent_children": len(g.parent.children) if g.parent is not None else 0,
+           "species_in_tree": len(rt.species)}
+    for key, ref in REFS.items():
+        r = relationship(rt, g, ref, own, prm.overlap_t)
+        row[f"{key}_relationship"] = r["rel"]
+        row[f"{key}_n_ref"] = r["n_ref"]
+        row[f"{key}_n_focal"] = r["n_focal"]
+        row[f"{key}_closest"] = r["closest"]
+        row[f"{key}_closest_is_ortholog"] = r["closest_is_ortholog"]
+        row[f"{key}_n_ref_in_family"] = r["n_ref_in_family"]
+        row[f"{key}_closest_tie"] = r["tie"]
+        if r["rel"] == "paralog" and r["meet"] is not None:
+            row[f"{key}_paralog_level"] = date_node(rt, r["meet"], clades)
+        if r["n_focal"] > 1:
+            b = birth_of_copy(rt, g, r["focal_ids"], clades, prm, tree_mode, prefixes)
+            if b:
+                row[f"{key}_dup_level"] = b["level"]
+                row[f"{key}_dup_class"] = b["class"]
+                row[f"{key}_dup_resolved"] = b["resolved"]
+                row[f"{key}_dup_levels_sides"] = f"{b['levels_side_a']}/{b['levels_side_b']}"
+                row[f"{key}_dup_outgroup_single"] = b["outgroup_single"]
+    tp = teleost_pattern(rt, g, own, prm.overlap_t, lambda s: level_of_species(clades, s))
+    row.update({f"teleost_{k}": v for k, v in tp.items()})
+    return row

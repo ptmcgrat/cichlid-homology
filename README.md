@@ -20,8 +20,15 @@ the `cichlid-data` command line. No hand-built data paths, no rclone, no downloa
 
     cichlid-homology survey --species Mzeb --n 300 --out ~/survey.json
 
+## Pilot
+
+    cichlid-homology probe
+    cichlid-homology pilot --species Mzeb --n 300 --out ~/pilot
+
+See `docs/pilot_plan.md`.
+
 ## Status
 
-0.1.x: reading layer and survey only. The pilot (rooting, relationships, dating, method
-comparison) has not started; the call-table schema is not settled and nothing is written to
-`Results/v1/Homology/` yet.
+0.2.x: pilot code (rooting, relationships, dating, method comparison), tested offline, not yet run on
+real data. The call-table schema is a draft (`docs/call_table_schema.md`); nothing is written to
+`Results/v1/Homology/` except scratch files under `native/calls/pilot`, which are not pushed.

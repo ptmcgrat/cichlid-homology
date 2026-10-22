@@ -101,6 +101,58 @@ def _survey2(args) -> int:
     return 0
 
 
+def _pilot(args) -> int:
+    from cichlid_data import Catalog, get_layout
+    from cichlid_data.clades import Clades
+    from .dating import Params
+    from .pilot import run_pilot
+
+    layout = get_layout()
+    out = Path(args.out).expanduser() if args.out else (
+        Path(layout.results("v1", "Homology").native().local) / "calls" / "pilot")
+    prm = Params(overlap_t=args.overlap, min_levels_each_side=args.min_levels,
+                 mostly_one_to_one=args.mostly, k_roots=args.k_roots)
+    s = run_pilot(layout, Catalog.load(layout), Clades.load(), args.species, args.n, prm,
+                  [float(x) for x in args.alt_overlap.split(",") if x], out)
+    print(json.dumps(s, indent=1, default=str))
+    print(f"\nwritten to {out}")
+    return 0
+
+
+def _probe(args) -> int:
+    """Print what the coordinator objects look like, so the adapters can be fixed if they are wrong."""
+    import cichlid_data
+    from cichlid_data import get_layout
+
+    print("cichlid_data", cichlid_data.__version__)
+    print("public names:", sorted(n for n in dir(cichlid_data) if not n.startswith("_")))
+    try:
+        from cichlid_data.master_tree import load_master_tree
+        mt = load_master_tree()
+        print("master tree:", type(mt).__name__, [n for n in dir(mt) if not n.startswith("_")][:40])
+        from .master import newick_of
+        nw = newick_of(mt)
+        print("master newick ok, starts:", nw[:80], "... length", len(nw))
+    except Exception as e:
+        print("master tree problem:", repr(e))
+    try:
+        from cichlid_data import LeafSpecies
+        ls = LeafSpecies.load(get_layout(), "Compara")
+        print("LeafSpecies:", [n for n in dir(ls) if not n.startswith("_")])
+        print("shadowed:", ls.shadowed())
+    except Exception as e:
+        print("LeafSpecies problem:", repr(e))
+    try:
+        from cichlid_data.clades import Clades
+        c = Clades.load()
+        print("Clades:", [n for n in dir(c) if not n.startswith("_")])
+        print("common_level(Mzeb,Drer):", c.common_level(["Mzeb", "Drer"]))
+        print("lineage(lepisosteus_oculatus):", c.lineage("lepisosteus_oculatus"))
+    except Exception as e:
+        print("Clades problem:", repr(e))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="cichlid-homology")
     ap.add_argument("--version", action="version", version=__version__)
@@ -116,6 +168,18 @@ def main(argv=None) -> int:
     s2.add_argument("--n-denovo", type=int, default=100)
     s2.add_argument("--out", default=None)
     s2.set_defaults(func=_survey2)
+    p = sub.add_parser("pilot", help="rooting, relationships, dating, TreeFam vs Compara (writes scratch files)")
+    p.add_argument("--species", default="Mzeb")
+    p.add_argument("--n", type=int, default=300)
+    p.add_argument("--overlap", type=float, default=0.0, help="species-overlap threshold (0 = any shared species)")
+    p.add_argument("--alt-overlap", default="0.1,0.25", help="thresholds for the sensitivity table")
+    p.add_argument("--min-levels", type=int, default=2)
+    p.add_argument("--mostly", type=float, default=0.8)
+    p.add_argument("--k-roots", type=int, default=3)
+    p.add_argument("--out", default=None, help="default: <native>/calls/pilot (not pushed)")
+    p.set_defaults(func=_pilot)
+    pr = sub.add_parser("probe", help="print the shape of the coordinator objects this code relies on")
+    pr.set_defaults(func=_probe)
     args = ap.parse_args(argv)
     return args.func(args)
 
