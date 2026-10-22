@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+- `master.py`: read the master tree from the coordinator's `Node` object (children/name), which is what
+  `load_master_tree()` returns; the 0.2.0 adapter only accepted Newick text and failed on it. Two tests added.
+
 ## 0.2.1
 - Documentation only: `docs/homology_repo_spec.md` replaced with the Dispatch 6 sheet (the copy in 0.1.0 to 0.2.0
   was the v0.12.0 sheet); `docs/NOTES.md` corrected and updated with the Dispatch 6 changes. No code change.

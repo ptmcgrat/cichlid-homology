@@ -11,6 +11,30 @@ from pathlib import Path
 from .speciestree import SpeciesTree
 
 
+def node_newick(root) -> str:
+    """Newick (names only) of any object with `children` and `name`, such as the coordinator's
+    cichlid_data.newick.Node, which is what load_master_tree() returns. Iterative."""
+    out, stack = [], [(root, 0)]
+    while stack:
+        n, state = stack.pop()
+        if n is None:
+            out.append(",")
+            continue
+        kids = list(n.children)
+        if not kids:
+            out.append(str(n.name))
+        elif state == 0:
+            out.append("(")
+            stack.append((n, 1))
+            for i, c in enumerate(reversed(kids)):
+                stack.append((c, 0))
+                if i < len(kids) - 1:
+                    stack.append((None, 2))
+        else:
+            out.append(")")
+    return "".join(out) + ";"
+
+
 def newick_of(obj) -> str:
     if isinstance(obj, str):
         s = obj.strip()
@@ -20,6 +44,8 @@ def newick_of(obj) -> str:
             return Path(s).read_text()
     if isinstance(obj, Path) and obj.exists():
         return obj.read_text()
+    if hasattr(obj, "children") and hasattr(obj, "name"):
+        return node_newick(obj)
     for name in ("to_newick", "newick", "write_newick", "as_newick"):
         f = getattr(obj, name, None)
         if f is not None:
