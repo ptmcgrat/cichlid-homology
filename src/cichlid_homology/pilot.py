@@ -1,10 +1,12 @@
 """The pilot: rooting, relationships, dating and the comparison of TreeFam and Compara for one
-focal species, on a sample of families. Reads only; writes to a scratch folder."""
+focal species. Genes are sampled once and the same genes are called in both methods. Reads only;
+writes to a scratch folder."""
 from __future__ import annotations
 
 import collections
 import csv
 import json
+import random
 import time
 import traceback
 from dataclasses import asdict
@@ -15,88 +17,123 @@ from .calls import REFS, call_gene
 from .consensus import label_agreement
 from .dating import Params
 from .master import load_species_tree
-from .orthology import RTree
-from .read import load_family, read_tsv, sample_families
+from .orthology import RTree, relationship
+from .read import load_family, read_tsv
 from .rooting import root_tree
 from .species import SHADOW_RULE, drop_shadowed, load_leaf_species
 from .tree import leaves, parse_newick, prune
 
-ROOT_RULE = "reconcile with the master species tree (fewest duplications); never midpoint"
+ROOT_RULE = ("reconcile with the master species tree (fewest duplications, then fewest losses); "
+             "never midpoint")
+PARTS = ("TreeFam", "Compara")
 
-BASE_COLS = ["gene_id", "method", "family", "tree_mode", "placement_status", "lwr", "assign_flags",
-             "fusion_partner", "rooting", "root_cost", "n_tied_roots", "roots_checked",
-             "leaves_after_prune", "shadowed_dropped", "parent_children", "species_in_tree"]
+BASE_COLS = ["gene_id", "method", "family", "tree_mode", "sampled", "placement_status", "lwr",
+             "assign_flags", "fusion_partner", "rooting", "root_cost", "root_losses", "n_tied_roots",
+             "n_tied_dup_only", "roots_checked", "leaves_after_prune", "shadowed_dropped",
+             "parent_children", "species_in_tree"]
 REF_COLS = ["relationship", "n_ref", "n_focal", "closest", "closest_is_ortholog",
             "n_ref_in_family", "closest_tie", "stable_across_roots", "paralog_level",
-            "dup_level", "dup_class", "dup_resolved", "dup_levels_sides", "dup_outgroup_single"]
+            "dup_level", "dup_class", "dup_resolved", "dup_levels_sides", "dup_outgroup_single",
+            "dup_outgroup_found"]
 TEL_COLS = ["teleost_tel_species", "teleost_tel_one", "teleost_tel_two_plus", "teleost_tel_zero",
-            "teleost_tel_frac_one_of_present"]
+            "teleost_tel_frac_one_of_present", "teleost_tel_frac_one_of_all", "teleost_tel_coverage"]
 COLUMNS = BASE_COLS + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 
 
-def process_family(fam, ls, shadowed, st, clades, prm, own_prefix, prefixes, alt_t, meta):
+def prepare(fam, ls, shadowed, st, prm):
+    """Parse, drop shadowed/unknown leaves, prune, root. Returns (rooting, rtrees, dropped, unknown)
+    or None when nothing is left."""
     root = parse_newick(fam.tree)
     sp_of = {x: ls.species(x) for x in fam.leaves}
-    kept, dropped = drop_shadowed(sp_of, shadowed, ls.is_project_gene)
+    _, dropped = drop_shadowed(sp_of, shadowed, ls.is_project_gene)
     unknown = {x for x, sp in sp_of.items() if sp is None}
     root = prune(root, set(dropped) | unknown)
     if root is None:
-        return [], {"error": "empty after pruning"}
+        return None
     for x in leaves(root):
         x.sp = sp_of[x.name]
-    t0 = time.time()
     rooting = root_tree(root, st, fam.rooted, k=prm.k_roots)
-    rts = [RTree(r) for r in rooting.roots]
+    return rooting, [RTree(r) for r in rooting.roots], dropped, unknown
+
+
+def process_family(fam, ls, shadowed, st, clades, prm, own_prefix, prefixes, alt_t, meta):
+    t0 = time.time()
+    prep = prepare(fam, ls, shadowed, st, prm)
+    if prep is None:
+        return [], {"error": "empty after pruning"}
+    rooting, rts, dropped, unknown = prep
     by_name = [{x.name: x for x in rt.leaves} for rt in rts]
     rows, sens = [], collections.Counter()
     for name in sorted(n for n in by_name[0] if n.startswith(own_prefix + "_")):
         g = by_name[0][name]
         own = g.sp
         row = call_gene(rts[0], g, own, prm, clades, fam.tree_mode, prefixes)
-        # stability across tied roots
         for key in REFS:
             rels = {row[f"{key}_relationship"]}
             for rt, bn in zip(rts[1:], by_name[1:]):
-                from .orthology import relationship
                 rels.add(relationship(rt, bn[name], REFS[key], own, prm.overlap_t)["rel"])
             row[f"{key}_stable_across_roots"] = len(rels) == 1
-        # sensitivity to the overlap threshold
-        from .orthology import relationship
         for t in alt_t:
             for key, ref in REFS.items():
                 if relationship(rts[0], g, ref, own, t)["rel"] != row[f"{key}_relationship"]:
                     sens[(t, key)] += 1
         row.update({"gene_id": name, "family": fam.family_id, "tree_mode": fam.tree_mode,
-                    "rooting": rooting.how, "root_cost": rooting.cost,
-                    "n_tied_roots": rooting.n_tied, "roots_checked": len(rts),
-                    "leaves_after_prune": len(rts[0].leaves), "shadowed_dropped": len(dropped)})
+                    "rooting": rooting.how, "root_cost": rooting.cost, "root_losses": rooting.losses,
+                    "n_tied_roots": rooting.n_tied, "n_tied_dup_only": rooting.n_tied_dup,
+                    "roots_checked": len(rts), "leaves_after_prune": len(rts[0].leaves),
+                    "shadowed_dropped": len(dropped)})
         rows.append(row)
-    info = {"leaves": len(rts[0].leaves), "n_tied": rooting.n_tied, "cost": rooting.cost,
-            "how": rooting.how, "dropped": len(dropped), "unknown": len(unknown),
-            "genes": len(rows), "seconds": round(time.time() - t0, 3), "sens": sens}
+    info = {"leaves": len(rts[0].leaves), "n_tied": rooting.n_tied, "n_tied_dup": rooting.n_tied_dup,
+            "cost": rooting.cost, "how": rooting.how, "dropped": len(dropped),
+            "unknown": len(unknown), "genes": len(rows),
+            "seconds": round(time.time() - t0, 3), "sens": sens}
     return rows, info
 
 
-def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path) -> dict:
+def choose_genes(candidates, n, seed=1):
+    return sorted(random.Random(seed).sample(sorted(candidates), min(n, len(candidates))))
+
+
+def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path,
+              n_denovo: int = 100) -> dict:
     prefixes = {s.prefix for s in cat.species(release="v1")}
     st = load_species_tree()
     out_dir.mkdir(parents=True, exist_ok=True)
     summary = {"cichlid_homology": __version__, "species": species,
-               "parameters": {**asdict(prm), "alt_overlap_t": list(alt_t), "n_families": n,
-                              "shadow_rule": SHADOW_RULE, "rooting_rule": ROOT_RULE,
-                              "mouse": "out of scope for release 1"}}
+               "parameters": {**asdict(prm), "alt_overlap_t": list(alt_t), "n_genes": n,
+                              "n_denovo_genes_per_method": n_denovo, "shadow_rule": SHADOW_RULE,
+                              "rooting_rule": ROOT_RULE, "mouse": "out of scope for release 1"}}
+    res = {p: layout.results("v1", p) for p in PARTS}
+    assign = {p: {r["gene_id"]: r for r in read_tsv(res[p].assign(species).local)} for p in PARTS}
+    froot = {p: res[p].family("X").local.parent for p in PARTS}
+    gp = {p: {r["gene_id"]: r for r in read_tsv(Path(res[p].native().local) / "summary" /
+                                                 "gene_placement.tsv")
+              if r["gene_id"].startswith(species + "_")} for p in PARTS}
+
+    def folder_ok(p, fam):
+        return fam not in ("", "NoHit") and (froot[p] / fam / "done.json").exists()
+
+    # the same genes in both methods: genes that have a finished family in each
+    both = [g for g in assign["TreeFam"] if g in assign["Compara"]
+            and folder_ok("TreeFam", assign["TreeFam"][g]["best_family"])
+            and folder_ok("Compara", assign["Compara"][g]["best_family"])]
+    sampled = set(choose_genes(both, n))
+    summary["genes_with_a_family_in_both_methods"] = len(both)
+    summary["genes_sampled"] = len(sampled)
     all_rows = {}
-    for part in ("TreeFam", "Compara"):
+    for part in PARTS:
         t0 = time.time()
-        res = layout.results("v1", part)
-        gp = {r["gene_id"]: r for r in read_tsv(
-            Path(res.native().local) / "summary" / "gene_placement.tsv") if r["gene_id"].startswith(species + "_")}
-        root, chosen, assign_rows = sample_families(layout, part, species, n)
-        assign = {r["gene_id"]: r for r in assign_rows}
+        gset = set(sampled)
+        dn_all = [g for g, r in gp[part].items() if r["mode"] == "denovo"
+                  and folder_ok(part, r["family"])]
+        gset |= set(choose_genes(dn_all, n_denovo, seed=2))
+        fam_ids = sorted({assign[part][g]["best_family"] for g in gset if g in assign[part]
+                          and folder_ok(part, assign[part][g]["best_family"])})
         fams = {}
-        for f in chosen:
+        for f in fam_ids:
             try:
-                fams[f] = load_family(root / f, prefixes, f)
+                fams[f] = load_family(froot[part] / f, prefixes, f)
             except Exception:
                 fams[f] = None
         ls = load_leaf_species(layout, part, only={x for fm in fams.values() if fm for x in fm.leaves})
@@ -114,8 +151,9 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
                 errors.append({"family": f, "error": traceback.format_exc()[-1500:]})
                 continue
             for r in rows:
-                a, p = assign.get(r["gene_id"], {}), gp.get(r["gene_id"], {})
-                r.update(method=part, placement_status=p.get("status", ""), lwr=p.get("lwr", ""),
+                a, p = assign[part].get(r["gene_id"], {}), gp[part].get(r["gene_id"], {})
+                r.update(method=part, sampled=r["gene_id"] in gset,
+                         placement_status=p.get("status", ""), lwr=p.get("lwr", ""),
                          assign_flags=a.get("flags", ""), fusion_partner=a.get("fusion_partner", ""))
             rows_part.extend(rows)
             sens.update(info.pop("sens", {}))
@@ -125,82 +163,101 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
             w = csv.DictWriter(fh, fieldnames=COLUMNS, delimiter="\t", extrasaction="ignore", restval="")
             w.writeheader()
             w.writerows(rows_part)
-        summary[part] = _summarize(rows_part, per_family, errors, sens, prm, shadowed, time.time() - t0)
-    summary["agreement"] = _agreement(all_rows, out_dir)
+        summary[part] = _summarize(rows_part, per_family, errors, sens, shadowed, time.time() - t0)
+    summary["agreement"] = _agreement(all_rows, sampled, out_dir)
     (out_dir / "pilot_summary.json").write_text(json.dumps(summary, indent=1, default=str))
     return summary
 
 
-def _summarize(rows, fams, errors, sens, prm, shadowed, seconds):
+def _summarize(rows, fams, errors, sens, shadowed, seconds):
     C = collections.Counter
-    out = {"families_ok": len(fams), "families_errors": len(errors),
-           "first_errors": errors[:3], "genes_called": len(rows), "shadowed": sorted(shadowed),
-           "seconds": round(seconds, 1),
+    out = {"families_ok": len(fams), "families_errors": len(errors), "first_errors": errors[:3],
+           "genes_called": len(rows), "genes_sampled_flag": sum(1 for r in rows if r["sampled"]),
+           "tree_mode_genes": dict(C(r["tree_mode"] for r in rows)),
+           "shadowed": sorted(shadowed), "seconds": round(seconds, 1),
            "rooting_how": dict(C(f["how"] for f in fams)),
-           "root_cost_min_med_max": _mmm([f["cost"] for f in fams if f["cost"] is not None]),
-           "n_tied_roots": dict(C(min(f["n_tied"], 5) for f in fams)),
+           "root_dups_min_med_max": _mmm([f["cost"] for f in fams if f["cost"] is not None]),
+           "families_by_n_tied_roots_(dup,loss)": dict(C(min(f["n_tied"], 5) for f in fams)),
+           "families_by_n_tied_roots_(dup_only)": dict(C(min(f["n_tied_dup"], 5) for f in fams)),
            "family_seconds_max": max((f["seconds"] for f in fams), default=None),
            "unknown_species_leaves": sum(f["unknown"] for f in fams)}
     for key in REFS:
+        exp = [r for r in rows if _int(r[f"{key}_n_ref"]) >= EXPANDED or _int(r[f"{key}_n_focal"]) >= EXPANDED]
+        norm = [r for r in rows if r not in exp]
         out[key] = {
-            "relationship": dict(C(r[f"{key}_relationship"] for r in rows)),
-            "closest_is_ortholog_false_but_closest_present": sum(
-                1 for r in rows if r[f"{key}_closest"] and r[f"{key}_closest_is_ortholog"] is False),
+            "relationship_all": dict(C(r[f"{key}_relationship"] for r in rows)),
+            "relationship_excluding_expanded": dict(C(r[f"{key}_relationship"] for r in norm)),
+            "genes_in_expanded_families": len(exp),
             "stable_across_roots": _frac(sum(1 for r in rows if r[f"{key}_stable_across_roots"]), len(rows)),
             "closest_tie": sum(1 for r in rows if r[f"{key}_closest_tie"]),
             "paralog_level": dict(C(r.get(f"{key}_paralog_level") for r in rows if r.get(f"{key}_paralog_level"))),
             "dup_class": dict(C(r.get(f"{key}_dup_class") for r in rows if r.get(f"{key}_dup_class"))),
             "dup_unresolved": sum(1 for r in rows if r.get(f"{key}_dup_resolved") is False),
-            "threshold_changes": {str(t): v for (t, k), v in sens.items() if k == key},
-        }
-    # goal 5: teleost pattern of one-to-one human orthologs
-    one = [r["teleost_tel_frac_one_of_present"] for r in rows
-           if r["human_relationship"] == "1:1" and r.get("teleost_tel_frac_one_of_present") is not None]
+            "threshold_changes": {str(t): v for (t, k), v in sorted(sens.items()) if k == key}}
+    one = [r for r in rows if r["human_relationship"] == "1:1" and r.get("teleost_tel_frac_one_of_all") is not None]
+    allf = [r["teleost_tel_frac_one_of_all"] for r in one]
+    cov = [r for r in one if (r["teleost_tel_coverage"] or 0) >= 0.5]
     out["teleost_pattern_human_1to1"] = {
-        "n": len(one), "frac_one_deciles": _deciles(one),
-        "share_ge_0.7": _frac(sum(1 for x in one if x >= 0.7), len(one)),
-        "share_ge_0.8": _frac(sum(1 for x in one if x >= 0.8), len(one)),
-        "share_ge_0.9": _frac(sum(1 for x in one if x >= 0.9), len(one))}
-    lw = []
-    for r in rows:
-        try:
-            lw.append((float(r["lwr"]) < 0.5, r["human_relationship"]))
-        except (TypeError, ValueError):
-            pass
-    out["low_support_(lwr<0.5)_relationships"] = dict(C(rel for low, rel in lw if low))
+        "n": len(one), "n_with_coverage_ge_0.5": len(cov),
+        "frac_one_of_all_deciles": _deciles(allf),
+        **{f"share_ge_{t}_of_all": _frac(sum(1 for x in allf if x >= t), len(allf)) for t in (0.7, 0.8, 0.9)},
+        **{f"share_ge_{t}_of_all_given_coverage": _frac(
+            sum(1 for r in cov if r["teleost_tel_frac_one_of_all"] >= t), len(cov)) for t in (0.7, 0.8, 0.9)},
+        "share_any_species_with_2plus": _frac(sum(1 for r in one if int(r["teleost_tel_two_plus"]) > 0), len(one))}
+    out["low_support_(lwr<0.5)_human_relationships"] = dict(C(
+        r["human_relationship"] for r in rows if _float(r["lwr"]) is not None and _float(r["lwr"]) < 0.5))
     return out
 
 
-def _agreement(all_rows, out_dir):
+def _agreement(all_rows, sampled, out_dir):
     by = {m: {r["gene_id"]: r for r in rows} for m, rows in all_rows.items()}
-    genes = sorted(set().union(*[set(d) for d in by.values()]))
-    res, review = {}, []
+    genes = sorted(set(by["TreeFam"]) & set(by["Compara"]))
+    res = {"genes_called_in_both_methods": len(genes), "sampled_genes_in_both": len(sampled & set(genes))}
+    review = []
     for key in REFS:
         labels, pairs = collections.Counter(), collections.Counter()
         for g in genes:
             vals = {}
             for m in by:
-                r = by[m].get(g)
-                v = r[f"{key}_relationship"] if r else None
-                vals[m] = None if v == "none" else v          # none = no such gene in this family
-            lab, val, _ = label_agreement(vals)
+                v = by[m][g][f"{key}_relationship"]
+                vals[m] = None if v == "none" else v      # none = no such gene in this family
+            lab, _, _ = label_agreement(vals)
             labels[lab] += 1
-            pairs[(vals.get("TreeFam"), vals.get("Compara"))] += 1
+            pairs[(vals["TreeFam"], vals["Compara"])] += 1
             if lab == "split":
                 review.append({"gene_id": g, "question": f"{key}_relationship",
-                               **{f"{m}": vals[m] for m in vals},
-                               **{f"{m}_family": (by[m].get(g) or {}).get("family", "") for m in by}})
+                               "TreeFam": vals["TreeFam"], "Compara": vals["Compara"],
+                               "TreeFam_family": by["TreeFam"][g]["family"],
+                               "Compara_family": by["Compara"][g]["family"],
+                               "TreeFam_closest": by["TreeFam"][g][f"{key}_closest"],
+                               "Compara_closest": by["Compara"][g][f"{key}_closest"],
+                               "TreeFam_tied_roots": by["TreeFam"][g]["n_tied_roots"],
+                               "Compara_tied_roots": by["Compara"][g]["n_tied_roots"]})
         res[key] = {"labels": dict(labels),
-                    "top_pairs_TreeFam_Compara": [[list(map(str, k)), v] for k, v in pairs.most_common(15)]}
+                    "pairs_TreeFam_Compara": [[list(map(str, k)), v] for k, v in pairs.most_common(20)]}
     if review:
         with open(out_dir / "pilot_review.tsv", "w", newline="") as fh:
             w = csv.DictWriter(fh, fieldnames=list(review[0]), delimiter="\t")
             w.writeheader()
             w.writerows(review)
-    res["note"] = ("relationship category only; identity of the closest human/zebrafish gene is not "
-                   "compared until the identifier mappings exist (symbols only)")
     res["review_rows"] = len(review)
+    res["note"] = ("relationship category only; the identity of the closest human/zebrafish gene is not "
+                   "compared until identifier mappings exist")
     return res
+
+
+def _int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _float(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def _frac(k, n):

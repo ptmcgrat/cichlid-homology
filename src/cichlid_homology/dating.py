@@ -60,13 +60,19 @@ def birth_of_copy(rt: RTree, g: Node, co_orthologs: set, clades, prm: Params,
         only_focal = all(_is_focal(x, prefixes) for x in rt.leaves_in(c0)) and \
             all(_is_focal(x, prefixes) for x in rt.leaves_in(c))
         resolved = not (tree_mode == "place" and only_focal)
-        out_sp = {}
-        for s in rt.species:
-            try:
-                if clades.lineage(s) == NON_TELEOST_FISH:
-                    out_sp[s] = len(rt.by_species[s])
-            except Exception:
-                pass
+        # gar / reedfish copies in the nearest clade outside the duplication that holds any
+        out_sp, prev, p = {}, a, a.parent
+        while p is not None and not out_sp:
+            for sib in p.children:
+                if sib is prev:
+                    continue
+                for x in rt.leaves_in(sib):
+                    try:
+                        if clades.lineage(x.sp) == NON_TELEOST_FISH:
+                            out_sp[x.sp] = out_sp.get(x.sp, 0) + 1
+                    except Exception:
+                        pass
+            prev, p = p, p.parent
         outgroup_single = bool(out_sp) and max(out_sp.values()) <= 1
         if not resolved:
             cls = "unresolved_place_mode"
@@ -87,5 +93,6 @@ def birth_of_copy(rt: RTree, g: Node, co_orthologs: set, clades, prm: Params,
         return {"level": level, "class": cls, "resolved": resolved,
                 "levels_side_a": len(lv_a), "levels_side_b": len(lv_b),
                 "outgroup_species": len(out_sp), "outgroup_single": outgroup_single,
+                "outgroup_found": bool(out_sp),
                 "n_species_below": bin(a.mask).count("1")}
     return None

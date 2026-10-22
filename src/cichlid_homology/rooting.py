@@ -1,22 +1,28 @@
 """Rooting an unrooted gene tree by reconciliation with a species tree (never midpoint).
 
-Cost of a rooting = number of duplication nodes under LCA reconciliation: a node is a duplication
-when its species-tree image equals the image of one of its children. Computed for every edge in one
-pass over directed edges, so all rootings are scored without rebuilding the tree.
+Cost of a rooting = (duplications, losses) under LCA reconciliation, compared in that order: the
+fewest duplications decide, and ties are broken by the fewest losses (the 0.2.x pilot found that most
+genes had several rootings with equal duplication counts). A node is a duplication when its
+species-tree image equals the image of one of its children. All rootings are scored in one pass over
+directed edges, so none needs the tree rebuilt.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from .speciestree import SpeciesTree
-from .tree import Node, leaves, postorder
+from .tree import Node, leaves
+
+W = 10_000_000   # a duplication outweighs any number of losses (losses stay far below W)
 
 
 @dataclass
 class Rooting:
     roots: list          # rooted trees (Node), best first, at most k
-    cost: int | None     # minimum duplication count
-    n_tied: int          # how many edges reach the minimum
+    cost: int | None     # duplications at the best root
+    losses: int | None   # losses at the best root
+    n_tied: int          # rootings tied on (duplications, losses)
+    n_tied_dup: int      # rootings tied on duplications alone
     how: str             # "recorded" or "reconciliation"
 
 
@@ -48,8 +54,16 @@ def _unrooted(root: Node):
     return nodes, adj, elen
 
 
+def _node_cost(st: SpeciesTree, m: int, ms: list):
+    """(is_duplication, losses) of a node with image m whose children have images ms."""
+    dup = len(ms) >= 2 and m in ms
+    dep = st.depth
+    loss = sum(dep[x] - dep[m] for x in ms) if dup else sum(dep[x] - dep[m] - 1 for x in ms)
+    return dup, max(loss, 0)
+
+
 def _edge_costs(nodes, adj, st: SpeciesTree, sp_id: dict):
-    """Return {(u, v): total duplications if the root is placed on edge (u, v)}."""
+    """{(u, v): W * duplications + losses if the root is placed on edge (u, v)}."""
     M, D = {}, {}
 
     def solve(p, v):
@@ -74,10 +88,9 @@ def _edge_costs(nodes, adj, st: SpeciesTree, sp_id: dict):
             m = ms[0]
             for x in ms[1:]:
                 m = st.lca(m, x)
-            d = sum(D[(v_, c)] for c in kids)
-            if len(kids) >= 2 and m in ms:
-                d += 1
-            M[key], D[key] = m, d
+            dup, loss = _node_cost(st, m, ms)
+            M[key] = m
+            D[key] = sum(D[(v_, c)] for c in kids) + (W if dup else 0) + loss
             stack.pop()
 
     cost = {}
@@ -88,7 +101,8 @@ def _edge_costs(nodes, adj, st: SpeciesTree, sp_id: dict):
                 solve(u, v)
                 mu, mv = M[(v, u)], M[(u, v)]
                 m = st.lca(mu, mv)
-                cost[(u, v)] = D[(v, u)] + D[(u, v)] + (1 if m in (mu, mv) else 0)
+                dup, loss = _node_cost(st, m, [mu, mv])
+                cost[(u, v)] = D[(v, u)] + D[(u, v)] + (W if dup else 0) + loss + st.depth[m]
     return cost
 
 
@@ -115,13 +129,15 @@ def root_tree(tree: Node, st: SpeciesTree, already_rooted: bool, k: int = 1) -> 
     best first; ties are ordered by edge index so the result is deterministic."""
     lv = leaves(tree)
     if already_rooted and len(tree.children) == 2:
-        return Rooting([tree], None, 1, "recorded")
+        return Rooting([tree], None, None, 1, 1, "recorded")
     if len(lv) < 2:
-        return Rooting([tree], 0, 1, "reconciliation")
+        return Rooting([tree], 0, 0, 1, 1, "reconciliation")
     nodes, adj, elen = _unrooted(tree)
     sp_id = {n.idx: st.id_of(n.sp) for n in nodes if n.is_leaf}
     cost = _edge_costs(nodes, adj, st, sp_id)
     best = min(cost.values())
     tied = sorted(e for e, c in cost.items() if c == best)
+    best_dup = min(c // W for c in cost.values())
+    n_tied_dup = sum(1 for c in cost.values() if c // W == best_dup)
     roots = [_reroot(nodes, adj, elen, u, v) for (u, v) in tied[:max(1, k)]]
-    return Rooting(roots, best, len(tied), "reconciliation")
+    return Rooting(roots, best // W, best % W, len(tied), n_tied_dup, "reconciliation")

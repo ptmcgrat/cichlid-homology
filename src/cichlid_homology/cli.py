@@ -113,9 +113,43 @@ def _pilot(args) -> int:
     prm = Params(overlap_t=args.overlap, min_levels_each_side=args.min_levels,
                  mostly_one_to_one=args.mostly, k_roots=args.k_roots)
     s = run_pilot(layout, Catalog.load(layout), Clades.load(), args.species, args.n, prm,
-                  [float(x) for x in args.alt_overlap.split(",") if x], out)
+                  [float(x) for x in args.alt_overlap.split(",") if x], out, n_denovo=args.n_denovo)
     print(json.dumps(s, indent=1, default=str))
     print(f"\nwritten to {out}")
+    return 0
+
+
+def _explain(args) -> int:
+    """Print the evidence behind one gene's call in one method."""
+    from cichlid_data import Catalog, get_layout
+    from cichlid_data.clades import Clades
+    from .calls import REFS
+    from .dating import Params
+    from .evidence import explain_gene
+    from .master import load_species_tree
+    from .pilot import prepare
+    from .species import load_leaf_species
+
+    layout = get_layout()
+    prefixes = {s.prefix for s in Catalog.load(layout).species(release="v1")}
+    res = layout.results("v1", args.part)
+    row = next((r for r in read_tsv(res.assign(args.gene.split("_")[0]).local)
+                if r["gene_id"] == args.gene), None)
+    if row is None or row["best_family"] in ("", "NoHit"):
+        print("this gene has no family in", args.part)
+        return 1
+    fam = load_family(res.family(row["best_family"]).local, prefixes, row["best_family"])
+    ls = load_leaf_species(layout, args.part, only=set(fam.leaves))
+    prm = Params(overlap_t=args.overlap, k_roots=1)
+    prep = prepare(fam, ls, set(ls.shadowed()), load_species_tree(), prm)
+    rooting, rts, dropped, _ = prep
+    print(f"{args.gene} in {fam.family_id} ({args.part}, {fam.tree_mode}); rooting {rooting.how}: "
+          f"{rooting.cost} duplications, {rooting.losses} losses, {rooting.n_tied} tied roots; "
+          f"{len(dropped)} shadowed leaves dropped; {len(rts[0].leaves)} leaves")
+    g = next(x for x in rts[0].leaves if x.name == args.gene)
+    for key in ([args.ref] if args.ref else list(REFS)):
+        print()
+        print("\n".join(explain_gene(rts[0], g, REFS[key], g.sp, args.overlap, Clades.load())))
     return 0
 
 
@@ -170,7 +204,8 @@ def main(argv=None) -> int:
     s2.set_defaults(func=_survey2)
     p = sub.add_parser("pilot", help="rooting, relationships, dating, TreeFam vs Compara (writes scratch files)")
     p.add_argument("--species", default="Mzeb")
-    p.add_argument("--n", type=int, default=300)
+    p.add_argument("--n", type=int, default=600, help="genes sampled (the same in both methods)")
+    p.add_argument("--n-denovo", type=int, default=100, help="extra genes from de novo families, per method")
     p.add_argument("--overlap", type=float, default=0.0, help="species-overlap threshold (0 = any shared species)")
     p.add_argument("--alt-overlap", default="0.1,0.25", help="thresholds for the sensitivity table")
     p.add_argument("--min-levels", type=int, default=2)
@@ -178,6 +213,12 @@ def main(argv=None) -> int:
     p.add_argument("--k-roots", type=int, default=3)
     p.add_argument("--out", default=None, help="default: <native>/calls/pilot (not pushed)")
     p.set_defaults(func=_pilot)
+    ex = sub.add_parser("explain", help="show the evidence behind one gene's call")
+    ex.add_argument("gene")
+    ex.add_argument("--part", default="TreeFam", choices=["TreeFam", "Compara"])
+    ex.add_argument("--ref", default=None, choices=["human", "zebrafish"])
+    ex.add_argument("--overlap", type=float, default=0.0)
+    ex.set_defaults(func=_explain)
     pr = sub.add_parser("probe", help="print the shape of the coordinator objects this code relies on")
     pr.set_defaults(func=_probe)
     args = ap.parse_args(argv)

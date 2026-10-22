@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 (changes made after reading the first pilot run, 0.2.2)
+- Pilot samples genes, not families, so the same genes are called in TreeFam and Compara (the 0.2.2 samples
+  shared only 27 genes). Extra genes from de novo families are added per method (`--n-denovo`).
+- Rooting: fewest duplications, then fewest losses (0.2.2 left most families with several equal roots).
+  `n_tied_roots` is now after the loss tie-break; `n_tied_dup_only` keeps the old count.
+- Outgroup (gar, reedfish) copies are counted in the nearest clade outside the duplication, not in the whole tree.
+- Teleost pattern: adds the fraction of all teleost species with exactly one copy, and a coverage figure.
+- Summary reports relationships with and without expanded families (n_ref or n_focal at least 10).
+- `cichlid-homology explain GENE --part TreeFam|Compara` prints the evidence behind a call.
+- Review list gains the closest gene and the tie counts of each method.
+- 32 offline tests.
+
 ## 0.2.2
 - `master.py`: read the master tree from the coordinator's `Node` object (children/name), which is what
   `load_master_tree()` returns; the 0.2.0 adapter only accepted Newick text and failed on it. Two tests added.

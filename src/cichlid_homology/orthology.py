@@ -141,4 +141,6 @@ def teleost_pattern(rt: RTree, g: Node, own: str, t: float, level_of) -> dict:
     n2 = sum(1 for s in tel if count.get(s, 0) >= 2)
     n0 = sum(1 for s in tel if count.get(s, 0) == 0)
     return {"tel_species": len(tel), "tel_one": n1, "tel_two_plus": n2, "tel_zero": n0,
-            "tel_frac_one_of_present": round(n1 / (n1 + n2), 4) if (n1 + n2) else None}
+            "tel_frac_one_of_present": round(n1 / (n1 + n2), 4) if (n1 + n2) else None,
+            "tel_frac_one_of_all": round(n1 / len(tel), 4) if tel else None,
+            "tel_coverage": round((len(tel) - n0) / len(tel), 4) if tel else None}

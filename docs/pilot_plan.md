@@ -1,7 +1,8 @@
 # Pilot (0.2.0): what to run and what it decides
 
     cichlid-homology probe                       # shapes of the coordinator objects; send the output if anything fails
-    cichlid-homology pilot --species Mzeb --n 300 --out ~/pilot
+    cichlid-homology pilot --species Mzeb --n 600 --n-denovo 100 --out ~/pilot
+    cichlid-homology explain Mzeb_101470768 --part TreeFam --ref zebrafish
 
 Writes `pilot_genes.TreeFam.tsv`, `pilot_genes.Compara.tsv`, `pilot_summary.json`, `pilot_review.tsv`
 (scratch; nothing is pushed). Thresholds are starting values, not decisions.
