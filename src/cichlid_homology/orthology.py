@@ -99,20 +99,21 @@ def relationship(rt: RTree, g: Node, ref: str, own: str, t: float) -> dict:
     r_orth = [x for (_, _, c, spec) in w if spec for x in rt.leaves_in(c) if x.sp == ref]
     # closest by position: R leaves under the nearest ancestor that has any
     first_a, cand = None, []
-    for (a, _, c, spec) in w:
+    for (a, c0, c, spec) in w:
         if first_a is not None and a is not first_a:
             break
         hit = [x for x in rt.leaves_in(c) if x.sp == ref]
         if hit:
             first_a = a
-            cand.extend((x, spec) for x in hit)
-    orth_cand = [x for (x, spec) in cand if spec]
-    pool = orth_cand or [x for (x, _) in cand]
+            cand.extend((x, spec, c0, c) for x in hit)
+    orth_cand = [x for (x, spec, _, _) in cand if spec]
+    pool = orth_cand or [x for (x, _, _, _) in cand]
     if len(pool) > 1:
         res["tie"] = True
     pool.sort(key=lambda x: (_path_len(x, first_a), x.name))
     best = pool[0]
-    res.update(closest=best.name, closest_is_ortholog=bool(orth_cand), meet=first_a)
+    res.update(closest=best.name, closest_is_ortholog=bool(orth_cand), meet=first_a,
+               meet_sides=next((c0, c) for (x, _, c0, c) in cand if x is best))
     if not r_orth:
         res.update(rel="paralog", n_ref=0, n_focal=0)
         return res

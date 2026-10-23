@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cichlid-homology"
-version = "0.3.0"
+version = "0.5.0"
 description = "Homology decider of the cichlid protein phylogeny resource (project 3)"
 requires-python = ">=3.11"
-dependencies = ["cichlid-coordinator>=0.13,<0.14"]
+dependencies = ["cichlid-coordinator>=0.14,<0.15"]
 
 [project.optional-dependencies]
 dev = ["pytest"]

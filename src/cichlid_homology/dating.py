@@ -30,6 +30,14 @@ def level_of_set(clades, species: list[str]):
         return None
 
 
+def date_mask(rt: RTree, mask: int, clades) -> str | None:
+    """Ladder level of the last common ancestor of the species in a mask (None if empty)."""
+    if not mask:
+        return None
+    lv = level_of_set(clades, rt.names_of_mask(mask))
+    return "cyclostome_disputed" if lv == "cyclostome" else lv
+
+
 def date_node(rt: RTree, node: Node, clades) -> str | None:
     """Ladder level of the last common ancestor of the species below a node.
     The disputed level is reported as 'cyclostome_disputed' and never as a date."""
@@ -55,6 +63,12 @@ def birth_of_copy(rt: RTree, g: Node, co_orthologs: set, clades, prm: Params,
         side_b = rt.names_of_mask(c.mask)
         lv_a = {level_of_species(clades, s) for s in side_a} & TELEOST_LEVELS
         lv_b = {level_of_species(clades, s) for s in side_b} & TELEOST_LEVELS
+        # the same count using reference leaves only: our own placed genes put cichlid and
+        # percomorph species on both sides by construction, so they are weak evidence of spread
+        ref_a = {level_of_species(clades, x.sp) for x in rt.leaves_in(c0)
+                 if not _is_focal(x, prefixes)} & TELEOST_LEVELS
+        ref_b = {level_of_species(clades, x.sp) for x in rt.leaves_in(c)
+                 if not _is_focal(x, prefixes)} & TELEOST_LEVELS
         # place mode cannot order focal genes among themselves: if both sides hold only our own
         # genes, the node is a multifurcation artefact, not a resolved duplication
         only_focal = all(_is_focal(x, prefixes) for x in rt.leaves_in(c0)) and \
@@ -94,5 +108,7 @@ def birth_of_copy(rt: RTree, g: Node, co_orthologs: set, clades, prm: Params,
                 "levels_side_a": len(lv_a), "levels_side_b": len(lv_b),
                 "outgroup_species": len(out_sp), "outgroup_single": outgroup_single,
                 "outgroup_found": bool(out_sp),
+                "level_overlap": date_mask(rt, c0.mask & c.mask, clades),
+                "ref_levels_a": len(ref_a), "ref_levels_b": len(ref_b),
                 "n_species_below": bin(a.mask).count("1")}
     return None

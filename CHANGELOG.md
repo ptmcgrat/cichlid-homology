@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.5.0
+- Pin `cichlid-coordinator>=0.14,<0.15` (tested against 0.14.1: `cichlid-data check --release v1 --part Homology`
+  gives 9 of 9; 32 offline tests passed on the 0.3.0 tree under 0.14.1).
+- `docs/homology_repo_spec.md` is now the Dispatch 7 sheet (it was the Dispatch 6 copy).
+- `names.py`: uses the coordinator's `ReferenceNames`. Each closest human and zebrafish gene gets its symbol,
+  official ID (HGNC / ZFIN), name status and `name_confidence` (`low` for replaced, legacy_symbol, unmapped or
+  missing names; the call is kept). All reference orthologs get capped ID and symbol lists.
+- The pilot compares the reference gene each method names by official ID (reliable names only) and writes
+  `pilot_identity_differences.tsv`; the summary has `identity_of_the_reference_gene` and `reference_names`.
+- `probe` also prints the shape of a `ReferenceNames` record. The field names of that record are not in the
+  sheet, so `names.info_of` accepts attribute- and dict-style records; check `probe` on first use.
+- Kept as they were: the 0.4.0 clade copy-number profile (goal B1) and the older node-based dating columns.
+- 52 offline tests.
+
+## 0.4.0
+- Goal B by copy-number profile (`profile.py`): the smallest clade containing the gene and an orthologous
+  non-teleost anchor (human, else another non-teleost jawed vertebrate); copies per teleost species in it,
+  grouped by ladder level; provisional label `single`, `retained_pair`, `cichlid_specific_duplication`,
+  `cichlid_lost_one_copy`, `mixed`, `insufficient_species`, `no_orthologous_anchor`. Columns `b_*`.
+- Pilot summary has `goal_B` (label counts, by family size, by human relationship, histograms of the share of
+  species with two copies) and the agreement of the goal B label between TreeFam and Compara.
+- The node-based dating columns stay in the output but are no longer the goal B answer.
+- 45 offline tests.
+
+## 0.3.1
+- `explain` prints the ladder level of each ancestor and the species that set it, so a date can be judged by hand.
+- Alternative levels to compare with the sheet's rule: `paralog_level_overlap` and `dup_level_overlap` (level of the
+  species held by both sides only), alongside the all-species level.
+- `dup_ref_levels_sides`: teleost levels on each side counting reference species only (our own placed genes fill the
+  levels by construction, so the 0.3.0 count was saturated).
+- `family_mzeb_genes` column; summary breaks relationships down by family size and reports agreement for small
+  families separately.
+- `docs/decisions.md`: the open decisions with the evidence so far.
+- 36 offline tests.
+
 ## 0.3.0 (changes made after reading the first pilot run, 0.2.2)
 - Pilot samples genes, not families, so the same genes are called in TreeFam and Compara (the 0.2.2 samples
   shared only 27 genes). Extra genes from de novo families are added per method (`--n-denovo`).

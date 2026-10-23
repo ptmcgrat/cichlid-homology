@@ -1,8 +1,9 @@
 """All per-gene calls on one rooted tree (pure; no coordinator needed)."""
 from __future__ import annotations
 
-from .dating import Params, birth_of_copy, date_node, level_of_species
+from .dating import Params, birth_of_copy, date_mask, date_node, level_of_species
 from .orthology import RTree, relationship, teleost_pattern
+from .profile import clade_profile
 from .tree import Node
 
 REFS = {"human": "homo_sapiens", "zebrafish": "danio_rerio"}
@@ -19,9 +20,12 @@ def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str,
         row[f"{key}_closest"] = r["closest"]
         row[f"{key}_closest_is_ortholog"] = r["closest_is_ortholog"]
         row[f"{key}_n_ref_in_family"] = r["n_ref_in_family"]
+        row[f"_{key}_orth_leaves"] = r["ref_orthologs"]
         row[f"{key}_closest_tie"] = r["tie"]
         if r["rel"] == "paralog" and r["meet"] is not None:
             row[f"{key}_paralog_level"] = date_node(rt, r["meet"], clades)
+            c0, c = r["meet_sides"]
+            row[f"{key}_paralog_level_overlap"] = date_mask(rt, c0.mask & c.mask, clades) or ""
         if r["n_focal"] > 1:
             b = birth_of_copy(rt, g, r["focal_ids"], clades, prm, tree_mode, prefixes)
             if b:
@@ -31,6 +35,9 @@ def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str,
                 row[f"{key}_dup_levels_sides"] = f"{b['levels_side_a']}/{b['levels_side_b']}"
                 row[f"{key}_dup_outgroup_single"] = b["outgroup_single"]
                 row[f"{key}_dup_outgroup_found"] = b["outgroup_found"]
+                row[f"{key}_dup_level_overlap"] = b["level_overlap"] or ""
+                row[f"{key}_dup_ref_levels_sides"] = f"{b['ref_levels_a']}/{b['ref_levels_b']}"
+    row.update(clade_profile(rt, g, clades, prm.overlap_t))
     tp = teleost_pattern(rt, g, own, prm.overlap_t, lambda s: level_of_species(clades, s))
     row.update({f"teleost_{k}": v for k, v in tp.items()})
     return row

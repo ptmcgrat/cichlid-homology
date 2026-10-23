@@ -17,6 +17,7 @@ from .calls import REFS, call_gene
 from .consensus import label_agreement
 from .dating import Params
 from .master import load_species_tree
+from .names import attach_names, identity_agreement, load_names
 from .orthology import RTree, relationship
 from .read import load_family, read_tsv
 from .rooting import root_tree
@@ -27,17 +28,23 @@ ROOT_RULE = ("reconcile with the master species tree (fewest duplications, then 
              "never midpoint")
 PARTS = ("TreeFam", "Compara")
 
-BASE_COLS = ["gene_id", "method", "family", "tree_mode", "sampled", "placement_status", "lwr",
+BASE_COLS = ["gene_id", "method", "family", "family_mzeb_genes", "tree_mode", "sampled", "placement_status", "lwr",
              "assign_flags", "fusion_partner", "rooting", "root_cost", "root_losses", "n_tied_roots",
              "n_tied_dup_only", "roots_checked", "leaves_after_prune", "shadowed_dropped",
              "parent_children", "species_in_tree"]
 REF_COLS = ["relationship", "n_ref", "n_focal", "closest", "closest_is_ortholog",
-            "n_ref_in_family", "closest_tie", "stable_across_roots", "paralog_level",
-            "dup_level", "dup_class", "dup_resolved", "dup_levels_sides", "dup_outgroup_single",
+            "n_ref_in_family", "closest_tie", "stable_across_roots", "paralog_level", "paralog_level_overlap",
+            "dup_level", "dup_level_overlap", "dup_ref_levels_sides", "dup_class", "dup_resolved", "dup_levels_sides", "dup_outgroup_single",
             "dup_outgroup_found"]
 TEL_COLS = ["teleost_tel_species", "teleost_tel_one", "teleost_tel_two_plus", "teleost_tel_zero",
             "teleost_tel_frac_one_of_present", "teleost_tel_frac_one_of_all", "teleost_tel_coverage"]
-COLUMNS = BASE_COLS + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+NAME_COLS = ["closest_symbol", "closest_id", "closest_name_status", "closest_name_reliable",
+             "name_confidence", "orthologs_ids", "orthologs_symbols", "orthologs_unreliable"]
+B_COLS = (["b_anchor", "b_label", "b_clade_leaves", "b_teleost_species_in_tree"]
+          + [f"b_{lv}_{k}" for lv in ("teleost", "percomorph", "ovalentaria", "cichlid")
+             for k in ("n", "1", "2", "3p")])
+COLUMNS = BASE_COLS + B_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 
 
@@ -65,7 +72,8 @@ def process_family(fam, ls, shadowed, st, clades, prm, own_prefix, prefixes, alt
     rooting, rts, dropped, unknown = prep
     by_name = [{x.name: x for x in rt.leaves} for rt in rts]
     rows, sens = [], collections.Counter()
-    for name in sorted(n for n in by_name[0] if n.startswith(own_prefix + "_")):
+    own_names = sorted(n for n in by_name[0] if n.startswith(own_prefix + "_"))
+    for name in own_names:
         g = by_name[0][name]
         own = g.sp
         row = call_gene(rts[0], g, own, prm, clades, fam.tree_mode, prefixes)
@@ -79,6 +87,7 @@ def process_family(fam, ls, shadowed, st, clades, prm, own_prefix, prefixes, alt
                 if relationship(rts[0], g, ref, own, t)["rel"] != row[f"{key}_relationship"]:
                     sens[(t, key)] += 1
         row.update({"gene_id": name, "family": fam.family_id, "tree_mode": fam.tree_mode,
+                    "family_mzeb_genes": len(own_names),
                     "rooting": rooting.how, "root_cost": rooting.cost, "root_losses": rooting.losses,
                     "n_tied_roots": rooting.n_tied, "n_tied_dup_only": rooting.n_tied_dup,
                     "roots_checked": len(rts), "leaves_after_prune": len(rts[0].leaves),
@@ -158,12 +167,18 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
             rows_part.extend(rows)
             sens.update(info.pop("sens", {}))
             per_family.append({"family": f, **info})
+        names_error = None
+        try:
+            attach_names(rows_part, load_names(layout, part))
+        except Exception:
+            names_error = traceback.format_exc()[-1200:]
         all_rows[part] = rows_part
         with open(out_dir / f"pilot_genes.{part}.tsv", "w", newline="") as fh:
             w = csv.DictWriter(fh, fieldnames=COLUMNS, delimiter="\t", extrasaction="ignore", restval="")
             w.writeheader()
             w.writerows(rows_part)
         summary[part] = _summarize(rows_part, per_family, errors, sens, shadowed, time.time() - t0)
+        summary[part]["reference_names"] = names_error or _names_summary(rows_part)
     summary["agreement"] = _agreement(all_rows, sampled, out_dir)
     (out_dir / "pilot_summary.json").write_text(json.dumps(summary, indent=1, default=str))
     return summary
@@ -193,7 +208,18 @@ def _summarize(rows, fams, errors, sens, shadowed, seconds):
             "paralog_level": dict(C(r.get(f"{key}_paralog_level") for r in rows if r.get(f"{key}_paralog_level"))),
             "dup_class": dict(C(r.get(f"{key}_dup_class") for r in rows if r.get(f"{key}_dup_class"))),
             "dup_unresolved": sum(1 for r in rows if r.get(f"{key}_dup_resolved") is False),
-            "threshold_changes": {str(t): v for (t, k), v in sorted(sens.items()) if k == key}}
+            "threshold_changes": {str(t): v for (t, k), v in sorted(sens.items()) if k == key},
+            "relationship_by_family_size": {
+                lab: dict(C(r[f"{key}_relationship"] for r in rows if lo <= _int(r["family_mzeb_genes"]) <= hi))
+                for lab, (lo, hi) in SIZE_BINS.items()},
+            "paralog_level_overlap": dict(C(r.get(f"{key}_paralog_level_overlap") or "none_shared"
+                                            for r in rows if r.get(f"{key}_paralog_level"))),
+            "paralog_level_vs_overlap_level": [[list(k), v] for k, v in C(
+                (r[f"{key}_paralog_level"], r.get(f"{key}_paralog_level_overlap") or "none_shared")
+                for r in rows if r.get(f"{key}_paralog_level")).most_common(12)],
+            "ohnolog_ref_levels_weaker_side": dict(C(
+                min(map(int, r[f"{key}_dup_ref_levels_sides"].split("/")))
+                for r in rows if r.get(f"{key}_dup_class", "").startswith("teleost_ohnolog")))}
     one = [r for r in rows if r["human_relationship"] == "1:1" and r.get("teleost_tel_frac_one_of_all") is not None]
     allf = [r["teleost_tel_frac_one_of_all"] for r in one]
     cov = [r for r in one if (r["teleost_tel_coverage"] or 0) >= 0.5]
@@ -204,9 +230,89 @@ def _summarize(rows, fams, errors, sens, shadowed, seconds):
         **{f"share_ge_{t}_of_all_given_coverage": _frac(
             sum(1 for r in cov if r["teleost_tel_frac_one_of_all"] >= t), len(cov)) for t in (0.7, 0.8, 0.9)},
         "share_any_species_with_2plus": _frac(sum(1 for r in one if int(r["teleost_tel_two_plus"]) > 0), len(one))}
+    out["goal_B"] = _goal_b(rows)
     out["low_support_(lwr<0.5)_human_relationships"] = dict(C(
         r["human_relationship"] for r in rows if _float(r["lwr"]) is not None and _float(r["lwr"]) < 0.5))
     return out
+
+
+def _goal_b(rows):
+    C = collections.Counter
+    usable = [r for r in rows if r.get("b_label") not in (None, "", "no_orthologous_anchor", "insufficient_species")]
+
+    def shares(rs, k):
+        v = []
+        for r in rs:
+            n = sum(_int(r[f"b_{lv}_n"]) for lv in ("teleost", "percomorph", "ovalentaria")) if k == "o" else _int(r["b_cichlid_n"])
+            if n:
+                one = sum(_int(r[f"b_{lv}_2"]) for lv in ("teleost", "percomorph", "ovalentaria")) if k == "o" else _int(r["b_cichlid_2"])
+                v.append(one / n)
+        return v
+
+    out = {"label_counts": dict(C(r.get("b_label") for r in rows)),
+           "anchor_counts": dict(C(r.get("b_anchor") for r in rows)),
+           "label_by_family_size": {lab: dict(C(r.get("b_label") for r in rows
+                                                if lo <= _int(r["family_mzeb_genes"]) <= hi))
+                                    for lab, (lo, hi) in SIZE_BINS.items()},
+           "label_by_human_relationship": {rel: dict(C(r.get("b_label") for r in rows
+                                                       if r["human_relationship"] == rel))
+                                           for rel in ("1:1", "1:many", "many:1", "many:many", "paralog", "none")},
+           "share_with_two_copies_non_cichlid_teleosts_deciles": _deciles(shares(usable, "o")),
+           "share_with_two_copies_cichlids_deciles": _deciles(shares(usable, "c")),
+           "histogram_share_two_copies_non_cichlid": _hist(shares(usable, "o"))}
+    return out
+
+
+def _names_summary(rows):
+    C = collections.Counter
+    out = {}
+    for key in REFS:
+        have = [r for r in rows if r.get(f"{key}_closest")]
+        out[key] = {
+            "closest_name_status": dict(C(r.get(f"{key}_closest_name_status", "") for r in have)),
+            "share_low_name_confidence": _frac(sum(1 for r in have if r.get(f"{key}_name_confidence") == "low"),
+                                               len(have)),
+            "genes_with_unreliable_orthologs": sum(1 for r in rows if _int(r.get(f"{key}_orthologs_unreliable")) > 0)}
+    return out
+
+
+def _identity(by, genes, out_dir):
+    """Do TreeFam and Compara name the same reference gene (official ID, reliable names only)?"""
+    ortho = ("1:1", "1:many", "many:1", "many:many")
+    res, diffs = {}, []
+    for key in REFS:
+        c = collections.Counter()
+        for g in genes:
+            a, b = by["TreeFam"][g], by["Compara"][g]
+            if a[f"{key}_relationship"] not in ortho or b[f"{key}_relationship"] not in ortho:
+                c["not_applicable_no_ortholog_in_one_method"] += 1
+                continue
+            v = identity_agreement(a.get(f"_{key}_ids", set()), b.get(f"_{key}_ids", set()))
+            c[v] += 1
+            if v == "different_gene" and len(diffs) < 2000:
+                diffs.append({"gene_id": g, "question": key,
+                              "TreeFam_symbols": a.get(f"{key}_orthologs_symbols", ""),
+                              "Compara_symbols": b.get(f"{key}_orthologs_symbols", ""),
+                              "TreeFam_ids": a.get(f"{key}_orthologs_ids", ""),
+                              "Compara_ids": b.get(f"{key}_orthologs_ids", ""),
+                              "TreeFam_relationship": a[f"{key}_relationship"],
+                              "Compara_relationship": b[f"{key}_relationship"],
+                              "TreeFam_family": a["family"], "Compara_family": b["family"]})
+        ans = c["same_gene"] + c["different_gene"]
+        res[key] = {**dict(c), "same_gene_rate_when_comparable": _frac(c["same_gene"], ans)}
+    if diffs:
+        with open(out_dir / "pilot_identity_differences.tsv", "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=list(diffs[0]), delimiter="\t")
+            w.writeheader()
+            w.writerows(diffs)
+    return res
+
+
+def _hist(v, bins=10):
+    h = [0] * bins
+    for x in v:
+        h[min(int(x * bins), bins - 1)] += 1
+    return h
 
 
 def _agreement(all_rows, sampled, out_dir):
@@ -214,8 +320,13 @@ def _agreement(all_rows, sampled, out_dir):
     genes = sorted(set(by["TreeFam"]) & set(by["Compara"]))
     res = {"genes_called_in_both_methods": len(genes), "sampled_genes_in_both": len(sampled & set(genes))}
     review = []
+    small = [g for g in genes if _int(by["TreeFam"][g]["family_mzeb_genes"]) < 10
+             and _int(by["Compara"][g]["family_mzeb_genes"]) < 10]
+    small_set = set(small)
+    res["genes_in_small_families_both"] = len(small)
     for key in REFS:
         labels, pairs = collections.Counter(), collections.Counter()
+        small_labels = collections.Counter()
         for g in genes:
             vals = {}
             for m in by:
@@ -223,6 +334,8 @@ def _agreement(all_rows, sampled, out_dir):
                 vals[m] = None if v == "none" else v      # none = no such gene in this family
             lab, _, _ = label_agreement(vals)
             labels[lab] += 1
+            if g in small_set:
+                small_labels[lab] += 1
             pairs[(vals["TreeFam"], vals["Compara"])] += 1
             if lab == "split":
                 review.append({"gene_id": g, "question": f"{key}_relationship",
@@ -233,16 +346,33 @@ def _agreement(all_rows, sampled, out_dir):
                                "Compara_closest": by["Compara"][g][f"{key}_closest"],
                                "TreeFam_tied_roots": by["TreeFam"][g]["n_tied_roots"],
                                "Compara_tied_roots": by["Compara"][g]["n_tied_roots"]})
-        res[key] = {"labels": dict(labels),
+        ans = labels["agree"] + labels["split"]
+        sans = small_labels["agree"] + small_labels["split"]
+        res[key] = {"labels": dict(labels), "labels_small_families": dict(small_labels),
+                    "agree_rate_when_both_answer": _frac(labels["agree"], ans),
+                    "agree_rate_when_both_answer_small_families": _frac(small_labels["agree"], sans),
                     "pairs_TreeFam_Compara": [[list(map(str, k)), v] for k, v in pairs.most_common(20)]}
+    labs = collections.Counter()
+    pairs = collections.Counter()
+    for g in genes:
+        vals = {}
+        for m in by:
+            v = by[m][g].get("b_label")
+            vals[m] = None if v in (None, "", "no_orthologous_anchor", "insufficient_species") else v
+        lab, _, _ = label_agreement(vals)
+        labs[lab] += 1
+        pairs[(vals["TreeFam"], vals["Compara"])] += 1
+    res["goal_B_label"] = {"labels": dict(labs),
+                           "pairs_TreeFam_Compara": [[list(map(str, k)), v] for k, v in pairs.most_common(15)]}
     if review:
         with open(out_dir / "pilot_review.tsv", "w", newline="") as fh:
             w = csv.DictWriter(fh, fieldnames=list(review[0]), delimiter="\t")
             w.writeheader()
             w.writerows(review)
+    res["identity_of_the_reference_gene"] = _identity(by, genes, out_dir)
     res["review_rows"] = len(review)
-    res["note"] = ("relationship category only; the identity of the closest human/zebrafish gene is not "
-                   "compared until identifier mappings exist")
+    res["note"] = ("relationships are compared by category; the reference gene is compared by official ID "
+                   "(HGNC / ZFIN) where both methods have reliable names, see identity_of_the_reference_gene")
     return res
 
 

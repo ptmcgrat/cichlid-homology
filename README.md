@@ -3,7 +3,7 @@
 Project 3 of the cichlid protein phylogeny resource: every orthology call, for all three methods
 (TreeFam, Compara, OrthoFinder), with one rule. See `docs/homology_repo_spec.md`.
 
-Depends on `cichlid-coordinator>=0.13,<0.14` and uses only its public API (`cichlid_data`) and
+Depends on `cichlid-coordinator>=0.14,<0.15` and uses only its public API (`cichlid_data`) and
 the `cichlid-data` command line. No hand-built data paths, no rclone, no downloads.
 
 ## Install (development)

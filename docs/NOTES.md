@@ -19,6 +19,14 @@
   OUTPUTS.md: `mode` `place`, blank `lwr` and `n_placements`, no leaf in `tree.nwk`, no row in `placements.tsv`,
   an all-gaps row in `combined.aln` and an all-`-` row in `residue_map.tsv`; no relationship from that method.
 
+## Dispatch 7 (2026-10-22, coordinator v0.14.1) in force
+- Aims A1, A2, B1, B2 as in the sheet's section 1; equal standing for the three methods on A1 and A2; B1 from
+  Compara and OrthoFinder with TreeFam only as a flagged fallback; B2 with OrthoFinder as the authority.
+- `ReferenceNames` gives each TreeFam and Compara reference protein a symbol and official ID; a call resting on a
+  `replaced`, `legacy_symbol` or `unmapped` protein is lower confidence. OrthoFinder's HGNC and ZFIN IDs come later.
+- Paralog dating is not a goal; the benchmark is optional; mouse out of scope; no comparison with 2018.
+- Pin `>=0.14,<0.15`.
+
 ## Dispatch 6 (2026-10-22) in force
 - One pack replaces every older copy. OUTPUTS.md is the copy from project 1's repository (updated 2026-10-21).
 - Fusion columns: the four `fusion_partner*` columns are filled if and only if `possible_fusion` is set.
@@ -30,6 +38,6 @@
   per-gene tables and of my call tables.
 
 ## Open
-- Identifier mappings: TreeFam's ENS2allIDs understood; Compara's current Ensembl IDs need a source. Compare by symbol.
+- Identifier mappings: solved for TreeFam and Compara by `ReferenceNames` (Dispatch 7); OrthoFinder's IDs are later.
 - Thresholds: see `pilot_plan.md`; they are settled only after the pilot is run on real data.
 - Return type of `load_master_tree()` and import path of `LeafSpecies` are assumed; `cichlid-homology probe` checks them.

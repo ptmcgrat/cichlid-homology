@@ -177,6 +177,18 @@ def _probe(args) -> int:
     except Exception as e:
         print("LeafSpecies problem:", repr(e))
     try:
+        from cichlid_data import ReferenceNames
+        t = ReferenceNames.load(get_layout(), "TreeFam")
+        print("ReferenceNames:", [n for n in dir(t) if not n.startswith("_")])
+        sample = next(iter(t.proteins("homo_sapiens")))
+        rec = t.get(sample)
+        print("  sample protein", sample, "->", type(rec).__name__, [n for n in dir(rec) if not n.startswith("_")])
+        from .names import info_of
+        print("  as read by cichlid-homology:", info_of(rec))
+        print("  status counts (human):", t.status_counts("homo_sapiens"))
+    except Exception as e:
+        print("ReferenceNames problem:", repr(e))
+    try:
         from cichlid_data.clades import Clades
         c = Clades.load()
         print("Clades:", [n for n in dir(c) if not n.startswith("_")])
