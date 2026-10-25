@@ -37,7 +37,7 @@ def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str,
                 row[f"{key}_dup_outgroup_found"] = b["outgroup_found"]
                 row[f"{key}_dup_level_overlap"] = b["level_overlap"] or ""
                 row[f"{key}_dup_ref_levels_sides"] = f"{b['ref_levels_a']}/{b['ref_levels_b']}"
-    row.update(clade_profile(rt, g, clades, prm.overlap_t))
+    row.update(clade_profile(rt, g, clades, prm.overlap_t, prm))
     tp = teleost_pattern(rt, g, own, prm.overlap_t, lambda s: level_of_species(clades, s))
     row.update({f"teleost_{k}": v for k, v in tp.items()})
     return row

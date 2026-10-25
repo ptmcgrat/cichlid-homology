@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .paths import default_out
 from .read import load_family, read_tsv, sample_families
 
 
@@ -73,9 +74,11 @@ def _survey(args) -> int:
                 info["native_summary"][name] = "MISSING"
         report[part] = info
     text = json.dumps(report, indent=1)
-    if args.out:
-        Path(args.out).expanduser().write_text(text)
+    out = Path(args.out).expanduser() if args.out else default_out("survey", ".json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
     print(text)
+    print(f"\nwritten to {out}")
     return 0
 
 
@@ -95,9 +98,11 @@ def _survey2(args) -> int:
             import traceback
             report[part] = {"error": traceback.format_exc()}
     text = json.dumps(report, indent=1, default=str)
-    if args.out:
-        Path(args.out).expanduser().write_text(text)
+    out = Path(args.out).expanduser() if args.out else default_out("survey2", ".json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text)
     print(text)
+    print(f"\nwritten to {out}")
     return 0
 
 
@@ -108,10 +113,10 @@ def _pilot(args) -> int:
     from .pilot import run_pilot
 
     layout = get_layout()
-    out = Path(args.out).expanduser() if args.out else (
-        Path(layout.results("v1", "Homology").native().local) / "calls" / "pilot")
+    out = Path(args.out).expanduser() if args.out else default_out("pilot")
     prm = Params(overlap_t=args.overlap, min_levels_each_side=args.min_levels,
-                 mostly_one_to_one=args.mostly, k_roots=args.k_roots)
+                 mostly_one_to_one=args.mostly, k_roots=args.k_roots,
+                 kept_frac=args.kept, lost_frac=args.lost)
     s = run_pilot(layout, Catalog.load(layout), Clades.load(), args.species, args.n, prm,
                   [float(x) for x in args.alt_overlap.split(",") if x], out, n_denovo=args.n_denovo)
     print(json.dumps(s, indent=1, default=str))
@@ -223,7 +228,9 @@ def main(argv=None) -> int:
     p.add_argument("--min-levels", type=int, default=2)
     p.add_argument("--mostly", type=float, default=0.8)
     p.add_argument("--k-roots", type=int, default=3)
-    p.add_argument("--out", default=None, help="default: <native>/calls/pilot (not pushed)")
+    p.add_argument("--kept", type=float, default=0.5, help="share of species with 2+ copies counted as kept")
+    p.add_argument("--lost", type=float, default=0.3, help="share below which the extra copy counts as absent")
+    p.add_argument("--out", default=None, help="default: ~/share/pilot_<version>_<timestamp>")
     p.set_defaults(func=_pilot)
     ex = sub.add_parser("explain", help="show the evidence behind one gene's call")
     ex.add_argument("gene")

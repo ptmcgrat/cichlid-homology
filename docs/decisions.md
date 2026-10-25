@@ -22,3 +22,13 @@ Counts per teleost species in the smallest clade holding the gene and an ortholo
 Expected: clusters at one copy (duplicate lost) and two (both kept); the middle ground is read from which ladder
 levels carry two copies (cichlids only = recent). Thresholds (`frac` 0.7, at least 3 non-cichlid species) are
 provisional: set them from the histograms in `pilot_summary.json` (`goal_B`).
+
+
+## Settled by the 0.5.0 pilot run (Mzeb, 600 genes + 100 de novo per method)
+- Goal B threshold: the share of non-cichlid species with 2 copies has two clusters and a valley near 0.5 in both
+  methods (TreeFam 0.4 to 0.5: 28 genes; Compara 0.5 to 0.6: 18 genes). 0.5 is used for "kept", 0.3 for "lost".
+- Reference gene identity, TreeFam against Compara: 98.5% (human) and 98.3% (zebrafish) the same gene when each
+  method has exactly one reference ortholog; 54% and 56% when either has several (even counting any shared ID).
+- Both methods give the same goal B label for 89% of the 1,270 genes labelled in both; only 23 conflicts do not
+  involve `mixed`.
+- Open: how many genes the NCBI-symbol check can test (many cichlid genes have only LOC names).

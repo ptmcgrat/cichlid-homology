@@ -1,18 +1,31 @@
-"""Goal B: the copy-number profile of a family across teleost species.
+"""Goals B1 and B2: the copy-number profile of a family across teleost species.
 
 For a cichlid gene g, take the smallest clade that contains g and an orthologous non-teleost anchor
 (human if the tree has it, otherwise any other non-teleost jawed vertebrate). That clade is rooted
-outside the teleost genome duplication, so it holds both duplicates if both were kept. Then count the
-genes of each teleost species in it. A species with one copy: the duplicate was lost (or never
-existed); two copies: both were kept; the species are grouped by ladder level so a duplication that
-only the cichlids carry shows up as cichlids with 2 and the other teleosts with 1.
+outside the teleost genome duplication, so it holds both duplicates if both were kept. Count the genes
+of each teleost species in it. Species are grouped into the non-cichlid teleosts (levels teleost,
+percomorph, ovalentaria, merged because TreeFam has only two to four species per level) and the
+cichlids. For each group the share of species with two or more copies decides its state:
 
-No node dating and no weight on any one outgroup branch. The labels use provisional thresholds
-(`frac`), and the pilot prints the distributions so they can be set from the data.
+    kept     share >= kept_frac   (the pilot's histograms have a valley near 0.5)
+    lost     share <  lost_frac
+    partial  in between
+
+B1 label (non-cichlid state, cichlid state):
+    lost, lost                 single                       a duplicate was lost early
+    kept, kept or partial      retained_pair                both copies kept across teleosts
+    lost, kept or partial      cichlid_specific_duplication a later duplicate (B2 counts the carriers)
+    kept, lost                 cichlid_lost_one_copy
+    partial, any               partial_retention            the middle ground (read `b_pattern`)
+    3+ copies widely           multi_copy                   an expansion, not a pair
+B2 (counts only; OrthoFinder is the authority for where carriers meet):
+    b_cichlid_n, b_cichlid_with2p, b_cichlid_extra_species.
+`b_pattern` has one character per level (teleost, percomorph, ovalentaria, cichlid):
+    + extra copy kept   . absent   ~ in between   - no species.
 """
 from __future__ import annotations
 
-from .dating import level_of_species
+from .dating import Params, level_of_species
 from .orthology import TELEOST_LEVELS, RTree
 from .tree import Node
 
@@ -43,7 +56,26 @@ def copy_counts(rt: RTree, clade: Node, level_of) -> dict:
     return out
 
 
-def summarize(counts: dict) -> dict:
+def state(share, prm: Params) -> str:
+    if share == "" or share is None:
+        return "none"
+    if share >= prm.kept_frac:
+        return "kept"
+    if share < prm.lost_frac:
+        return "lost"
+    return "partial"
+
+
+def _group(prefix: str, d: dict) -> dict:
+    n = len(d)
+    two = sum(1 for v in d.values() if v >= 2)
+    three = sum(1 for v in d.values() if v >= 3)
+    return {f"b_{prefix}_n": n, f"b_{prefix}_with2p": two, f"b_{prefix}_with3p": three,
+            f"b_{prefix}_share2p": round(two / n, 4) if n else "",
+            f"b_{prefix}_share3p": round(three / n, 4) if n else ""}
+
+
+def summarize(counts: dict, prm: Params) -> dict:
     row = {}
     for lv in LEVELS:
         c = counts[lv]
@@ -51,32 +83,39 @@ def summarize(counts: dict) -> dict:
         row[f"b_{lv}_1"] = sum(1 for v in c.values() if v == 1)
         row[f"b_{lv}_2"] = sum(1 for v in c.values() if v == 2)
         row[f"b_{lv}_3p"] = sum(1 for v in c.values() if v >= 3)
+    other = {}
+    for lv in NON_CICHLID:
+        other.update(counts[lv])
+    row.update(_group("other", other))
+    row.update(_group("cichlid", counts["cichlid"]))
+    code = {"kept": "+", "lost": ".", "partial": "~", "none": "-"}
+    row["b_pattern"] = "".join(
+        code[state(_share(counts[lv]), prm)] for lv in LEVELS)
+    row["b_cichlid_extra_species"] = ";".join(sorted(s for s, v in counts["cichlid"].items() if v >= 2))
+    row["b_other_state"] = state(row["b_other_share2p"], prm)
+    row["b_cichlid_state"] = state(row["b_cichlid_share2p"], prm)
     return row
 
 
-def _group(row, levels, k):
-    return sum(row[f"b_{lv}_{k}"] for lv in levels)
+def _share(d: dict):
+    return (sum(1 for v in d.values() if v >= 2) / len(d)) if d else ""
 
 
-def label(row: dict, frac: float = 0.7, min_other: int = 3, min_cichlid: int = 1) -> str:
-    """Provisional label from the per-level counts."""
-    n_o, n_c = _group(row, NON_CICHLID, "n"), row["b_cichlid_n"]
-    if n_o < min_other or n_c < min_cichlid:
+def label(row: dict, prm: Params) -> str:
+    if row["b_other_n"] < prm.min_other or row["b_cichlid_n"] < 1:
         return "insufficient_species"
-    o1, o2 = _group(row, NON_CICHLID, "1") / n_o, _group(row, NON_CICHLID, "2") / n_o
-    c1, c2 = row["b_cichlid_1"] / n_c, row["b_cichlid_2"] / n_c
-    if o1 >= frac and c1 >= frac:
-        return "single"
-    if o2 >= frac and c2 >= frac:
-        return "retained_pair"
-    if o1 >= frac and c2 >= frac:
-        return "cichlid_specific_duplication"
-    if o2 >= frac and c1 >= frac:
-        return "cichlid_lost_one_copy"
-    return "mixed"
+    if row["b_other_share3p"] != "" and row["b_other_share3p"] >= prm.many_frac:
+        return "multi_copy"
+    so, sc = row["b_other_state"], row["b_cichlid_state"]
+    if so == "partial":
+        return "partial_retention"
+    if so == "lost":
+        return "single" if sc == "lost" else "cichlid_specific_duplication"
+    return "cichlid_lost_one_copy" if sc == "lost" else "retained_pair"
 
 
-def clade_profile(rt: RTree, g: Node, clades, t: float, frac: float = 0.7) -> dict:
+def clade_profile(rt: RTree, g: Node, clades, t: float, prm: Params | None = None) -> dict:
+    prm = prm or Params()
     lv = lambda s: level_of_species(clades, s)
     human = {"homo_sapiens"} & set(rt.species)
     other = {s for s in rt.species if s != "homo_sapiens" and lv(s) == "gnathostome"}
@@ -86,8 +125,8 @@ def clade_profile(rt: RTree, g: Node, clades, t: float, frac: float = 0.7) -> di
         row["b_label"] = "no_orthologous_anchor"
         return row
     counts = copy_counts(rt, a, lv)
-    row.update(summarize(counts))
+    row.update(summarize(counts, prm))
     row["b_clade_leaves"] = a.hi - a.lo
     row["b_teleost_species_in_tree"] = sum(1 for s in rt.species if lv(s) in TELEOST_LEVELS)
-    row["b_label"] = label(row, frac)
+    row["b_label"] = label(row, prm)
     return row

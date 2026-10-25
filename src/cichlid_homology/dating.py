@@ -14,6 +14,12 @@ class Params:
     min_levels_each_side: int = 2   # "several teleost levels" on each side of a retained ohnolog pair
     mostly_one_to_one: float = 0.8  # fraction of teleost species with exactly one copy (pilot)
     k_roots: int = 3                # tied rootings checked for stability
+    # goal B (provisional, set from the pilot's histograms): share of species with 2 or more copies
+    kept_frac: float = 0.5          # at or above: the extra copy is kept ("+")
+    lost_frac: float = 0.3          # below: the extra copy is absent (".")
+    many_frac: float = 0.3          # share of non-cichlid species with 3 or more copies: a multi-copy family
+    min_other: int = 3              # fewest non-cichlid teleost species needed to label
+    expanded_min: int = 10          # M. zebra genes in a family at or above which it counts as expanded
 
 
 def level_of_species(clades, sp):

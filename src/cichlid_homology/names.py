@@ -81,6 +81,7 @@ def attach_names(rows: list, table, refs=("human", "zebrafish")) -> None:
             ids = sorted({i["official_id"] for i in infos if i["reliable"] and i["official_id"]})
             syms = sorted({i["symbol"] for i in infos if i["symbol"]})
             r[f"_{key}_ids"] = set(ids)
+            r[f"_{key}_symbols"] = set(syms)
             r[f"{key}_orthologs_ids"] = _capped(ids)
             r[f"{key}_orthologs_symbols"] = _capped(syms)
             r[f"{key}_orthologs_unreliable"] = sum(1 for i in infos if not i["reliable"])

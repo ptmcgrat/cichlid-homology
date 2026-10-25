@@ -23,7 +23,7 @@ the `cichlid-data` command line. No hand-built data paths, no rclone, no downloa
 ## Pilot
 
     cichlid-homology probe
-    cichlid-homology pilot --species Mzeb --n 600 --n-denovo 100 --out ~/pilot
+    cichlid-homology pilot --species Mzeb --n 600 --n-denovo 100      # writes to ~/share
     cichlid-homology explain Mzeb_101470768 --part TreeFam
 
 See `docs/pilot_plan.md`.

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+- Goal B labels revised after the 0.5.0 run (`profile.py`): non-cichlid teleosts are one group (TreeFam has only 2 to 4
+  species per level); a species carries an extra copy at 2 or more copies (cichlid expansions with 3+ now count);
+  states `kept` (share >= 0.5, the valley in both methods' histograms), `lost` (< 0.3), `partial`. Labels: `single`,
+  `retained_pair`, `cichlid_specific_duplication`, `cichlid_lost_one_copy`, `partial_retention`, `multi_copy`.
+  New columns: `b_pattern` (one character per level), `b_other_*`, `b_cichlid_share2p`, and the B2 counts
+  `b_cichlid_with2p`, `b_cichlid_extra_species`. Options `--kept` and `--lost`.
+- `expanded_family` flag (10 or more M. zebra genes in the family); it replaces only the ambiguous labels
+  (`partial_retention`, `multi_copy`); the original is in `b_label_raw`.
+- `symbols.py`: the closest human and zebrafish symbols are compared with the gene's own NCBI symbol (genes table).
+  Grades exact, stem (a/b suffix), none, unnamed, no_reference_symbol. The summary reports rates by relationship and
+  adjudicates the genes where the two methods name different reference genes.
+- Outputs default to `~/share/<name>_<version>_<timestamp>` (`pilot`, `survey`, `survey2`); `--out` overrides.
+- 64 offline tests.
+
 ## 0.5.0
 - Pin `cichlid-coordinator>=0.14,<0.15` (tested against 0.14.1: `cichlid-data check --release v1 --part Homology`
   gives 9 of 9; 32 offline tests passed on the 0.3.0 tree under 0.14.1).

@@ -19,6 +19,11 @@
   OUTPUTS.md: `mode` `place`, blank `lwr` and `n_placements`, no leaf in `tree.nwk`, no row in `placements.tsv`,
   an all-gaps row in `combined.aln` and an all-`-` row in `residue_map.tsv`; no relationship from that method.
 
+## Working rules from the owner
+- Outputs go to `~/share`, not the home directory.
+- No code is written without the owner's go-ahead.
+- Questions and results are reported to the owner; the coordinator is written to only when blocked.
+
 ## Dispatch 7 (2026-10-22, coordinator v0.14.1) in force
 - Aims A1, A2, B1, B2 as in the sheet's section 1; equal standing for the three methods on A1 and A2; B1 from
   Compara and OrthoFinder with TreeFam only as a flagged fallback; B2 with OrthoFinder as the authority.
