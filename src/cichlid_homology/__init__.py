@@ -1,2 +1,2 @@
 """cichlid-homology: the homology decider (project 3)."""
-__version__ = "0.10.1"
+__version__ = "0.11.0"

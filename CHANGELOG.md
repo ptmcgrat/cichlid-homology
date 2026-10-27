@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.11.0 (tree-based dating of duplications)
+- `treedate.py`: a third line of evidence for B1 and B2, read from the shape of the rooted gene tree. The tree is
+  reconciled with the master species tree: a node is a duplication when the lowest common ancestor (in the species
+  tree) of its species equals that of one of its children. No share thresholds. For each gene, in its anchor
+  clade: `d_root` (`pair` if the teleost genes form two or more lineages, `single` if one), `d_root_level` (a pair at
+  the `teleost` level has early teleosts in it; at `percomorph` or lower the tree cannot tell a teleost pair lost in
+  the early teleosts from a later duplicate), `d_support` (early teleosts on both sides, one, none), `d_overlap` (the
+  species the two largest lineages share as a share of all their species: near 1 for a fully retained pair, 0 for
+  reciprocal losses, small for a thin pair or a stray gene), `d_gene_lineage`, `d_focal_lineages`, `d_later_levels`,
+  `d_first_later_level`, `d_species_dups`, `d_carriers`/`d_carrier_n` (denovo trees: the cichlid species that hold both
+  copies below the deepest later duplication: B2), and `d_call` (pair, lost_duplicate, later_duplicate_in_cichlids,
+  later_duplicate_before_cichlids, pair_unresolved_depth).
+- Placement trees (TreeFam, Compara): the placed project genes are not used to find duplications (genes on one branch
+  cannot be ordered); the structure comes from the reference leaves and each project gene is assigned to the lineage
+  it was placed in. Denovo trees (OrthoFinder): every leaf counts.
+- Known weakness, tested: one stray gene in the wrong clade can create a duplication that is not there; `d_overlap`
+  is small in that case.
+- Report: a tree-based dating section with the tree call by B1 category. 135 offline tests; 0.2 ms per gene.
+
 ## 0.10.1 (simplified B1 categories, later duplicates before the cichlids)
 - `t_category` groups the tiers into six categories: Lost duplicate; Both copies kept (best guess) (R2, R3, probable
   and possible pairs; a zebrafish-only loss is no longer its own category); Later duplicate, in cichlids; Later

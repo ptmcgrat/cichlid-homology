@@ -50,3 +50,9 @@ unresolved, no_anchor, expanded_family, many_copies), `t_tier` (core, probable, 
 `t_category` (Lost duplicate; Both copies kept (best guess); Later duplicate, in cichlids; Later duplicate, before cichlids;
 Disputed; Unclassified), `t_when` (the level of a later duplicate before the cichlids: teleost, percomorph, ovalentaria; `;`-joined),
 and the call `later_duplicate_before_cichlids` in `t_call`; `t_row` is `R4` for it.
+
+
+## Draft additions in 0.11.0 (tree-based dating)
+`d_status` (ok, no_anchor, no_teleost, one_teleost_gene, one_teleost_species, teleosts_not_monophyletic), `d_call`, `d_root`
+(pair or single), `d_root_level`, `d_support`, `d_lineages`, `d_overlap`, `d_gene_lineage`, `d_focal_lineages`, `d_later_levels`,
+`d_first_later_level`, `d_species_dups`, `d_carriers`, `d_carrier_n`.

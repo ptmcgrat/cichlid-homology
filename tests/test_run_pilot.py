@@ -150,3 +150,16 @@ def test_tiers_in_the_whole_pilot_with_and_without_published_pairs(tmp_path):
     assert t2["Mzeb_2"]["t_pairs_relaxed_n"] == "1" and t2["Mzeb_2"]["t_pairs_species"] == "zebrafish"
     assert summary2["ohnologs_species_loaded"] == ["zebrafish"]
     assert summary2["A"]["tiers"]["TreeFam"]["published_pair_evidence_loaded"] is True
+
+
+def test_tree_based_dating_in_the_whole_pilot(tmp_path):
+    summary, out = run(tmp_path, all_genes=True)
+    t = rows(out / "pilot_genes.TreeFam.tsv")
+    assert t["Mzeb_1"]["d_call"] == "lost_duplicate" and t["Mzeb_1"]["d_root"] == "single"
+    # the fake placement tree holds two reference fish clades with early teleosts in both: a pair at the teleost root
+    assert t["Mzeb_2"]["d_call"] == "pair" and t["Mzeb_2"]["d_support"] == "both_early"
+    assert {t["Mzeb_2"]["d_gene_lineage"], t["Mzeb_3"]["d_gene_lineage"]} == {"A", "B"}     # the letters are arbitrary
+    assert t["Mzeb_2"]["d_focal_lineages"] == "2"
+    D = summary["A"]["treedate"]["TreeFam"]
+    assert D["scored"] == 5 and D["calls"]["pair"] == 2 and D["by_category"]["Both copies kept (best guess)"] == {"pair": 2}
+    assert "## Tree-based dating" in (out / "pilot_report.md").read_text()

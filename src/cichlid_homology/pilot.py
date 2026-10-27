@@ -30,6 +30,7 @@ from .parsimony import GRID, GRID_COLS, ParsimonyContext
 from .owngenes import gene_order, own_genes
 from .quality import attach_quality
 from .tiers import TIER_COLS, assign as assign_tiers
+from .treedate import D_COLS
 from .species import SHADOW_RULE, drop_shadowed, load_leaf_species
 from .symbols import attach_symbol_check, attach_symbol_check_a, matched, own_symbols
 from .tree import leaves, parse_newick, prune
@@ -69,7 +70,7 @@ ORIG_COLS = ["orig_basis", "orig_copies_n", "orig_class", "orig_nearest_copy", "
              "orig_copies_same_seqid", "orig_copy_ids"]
 QUAL_COLS = ["risk_flags", "n_risk_flags", "gt_partial", "gt_low_quality", "gt_internal_stops",
              "gt_protein_length", "gt_description"]
-COLUMNS = BASE_COLS + A_COLS + B_COLS + P_COLS + GRID_COLS + SUPPORT_COLS + TIER_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+COLUMNS = BASE_COLS + A_COLS + B_COLS + P_COLS + GRID_COLS + D_COLS + SUPPORT_COLS + TIER_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
 SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 

@@ -24,6 +24,7 @@ class Params:
     parsimony: bool = True          # score the clade copy numbers by parsimony on the species tree
     parsimony_kcap: int = 6         # copy numbers above this are treated as this many
     parsimony_grid: bool = False    # also label every gene under a grid of gain/loss costs (calibration)
+    treedate: bool = True           # date the duplications from the tree shape (reconciliation with the master species tree)
     gain_cost: int = 2              # parsimony: cost of one gained copy (a loss costs loss_cost); calibrated in 0.9.1
     loss_cost: int = 1
     ohnologs_dir: str = ""          # optional folder of OHNOLOGS v2 3R pair files (independent evidence for the tiers)

@@ -12,6 +12,7 @@ from .clade_counts import GROUPS
 from .consensus import label_agreement
 from .summary_p import parsimony_agreement, parsimony_summary
 from .tiers import tiers_summary
+from .treedate import treedate_summary
 from .symbols import matched
 
 REFS = ("human", "zebrafish")
@@ -310,6 +311,7 @@ def build(all_rows, out_dir: Path) -> dict:
            "parsimony": {m: parsimony_summary(rows) for m, rows in all_rows.items()},
            "parsimony_agreement": parsimony_agreement(by, genes),
            "tiers": {m: tiers_summary(rows) for m, rows in all_rows.items()},
+           "treedate": {m: treedate_summary(rows) for m, rows in all_rows.items()},
            "candidates_in_both_methods": len(ids[A] & ids[B]),
            "candidates_in_both_methods_with_no_risk_flag_in_either": len(clean[A] & clean[B])}
     out["category_splits_written"] = write_splits(by, genes, out_dir)

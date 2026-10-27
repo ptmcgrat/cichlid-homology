@@ -152,6 +152,25 @@ def write_report(summary: dict, path: Path) -> None:
         L += [f"### {m}: {T['placed']} genes placed in a row: core {T['core']}, probable {T['probable']}, "
               f"possible {T['possible']}, disputed {T['disputed']}{ev}. Unclassified: {T['unclassified']}", "",
               _table(["row", "core", "probable", "possible", "disputed", "unclassified"], trs), ""]
+    L += ["## Tree-based dating (0.11.0)", "",
+          "Each gene's family tree is reconciled with the master species tree: the teleost genes of the anchor clade form "
+          "one lineage (`single`, a lost duplicate) or two or more (`pair`, a duplication at the teleost root). "
+          "`d_support` says whether early teleosts are on both sides; `d_overlap` is the share of species the two "
+          "largest lineages have in common (small = little to support the pair, or a stray gene). In a placement tree "
+          "(TreeFam, Compara) duplications among project genes cannot be seen, so only the reference species date them.", ""]
+    for m in ("TreeFam", "Compara"):
+        D = A["treedate"][m]
+        if not D.get("scored"):
+            L += [f"### {m}: nothing dated ({D.get('status')})", ""]
+            continue
+        L += [f"### {m}: {D['scored']} of {D['genes']} genes dated ({D['status']})", "",
+              f"Calls: {D['calls']}. Pair support (early teleosts on both sides, one side, none): {D['pair_support']}. "
+              f"Level of the duplication node at the teleost root: {D['pair_root_level']}. Pairs with M. zebra genes in two or "
+              f"more lineages: {D['pairs_with_focal_species_in_two_or_more_lineages']}.", ""]
+        cats = sorted(D["by_category"])
+        calls = list(D["calls"])
+        L += ["Tree call by B1 category:", "",
+              _table(["B1 category"] + calls, [[c] + [D["by_category"][c].get(k, 0) for k in calls] for c in cats]), ""]
     L += ["## Where the extra copies sit", "",
           "For genes with two or more focal-species copies in the reference clade: the nearest other copy is "
           "adjacent (no gene between), near (at most the set number of genes between), distant on the same "

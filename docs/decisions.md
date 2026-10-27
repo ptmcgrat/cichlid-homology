@@ -84,3 +84,15 @@ large clades (expanded families), and whether to tell the coordinator that the s
   is added for duplicates after the teleost root and before the cichlids that are not ohnologs.
 - The later-duplicate-before-cichlids rule needs tandem copies and no published pair because dispersed copies
   (67% of the 909 candidate genes with two or more copies) look like a teleost-duplication pair kept in the percomorphs.
+
+
+## 0.11.0: tree-based dating
+- Counts cannot separate a teleost pair lost in the early teleosts from a new duplicate in the percomorphs, or
+  reciprocal losses from a lost duplicate; the tree shape can (a duplication node whose species lie at the teleost
+  level against one inside the percomorphs; two lineages with no species in common). Reconciliation with the master
+  species tree is used, not species overlap, so reciprocal losses show as a pair.
+- The tree-based call is added beside the counts and parsimony, not instead of them; the tiers are not changed yet.
+  First look on mzebra: how the tree call falls across the B1 categories, how often a pair has early teleosts on both
+  sides, and the overlap of the disputed genes.
+- When OrthoFinder arrives its trees are full trees of our own genes, so the same code also dates duplications
+  among project genes (B2 carriers).
