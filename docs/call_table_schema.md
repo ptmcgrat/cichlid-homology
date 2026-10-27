@@ -39,8 +39,14 @@ To add before the full run: `<ref>_closest_symbol` (when the identifier mappings
 
 
 ## Draft additions in 0.10.0 (B1 tiers)
-`t_row` (R1, R2, R3, R2/3/4, R5, other, outside), `t_call` (lost_duplicate, retained_pair, cichlid_specific_duplicate,
-unresolved, no_anchor, expanded_family, many_copies), `t_tier` (core, probable, possible, disputed, outside), `t_basis`
+`t_row` (R1, R2, R3, R2/3/4, R5, other, unclassified), `t_call` (lost_duplicate, retained_pair, cichlid_specific_duplicate,
+unresolved, no_anchor, expanded_family, many_copies), `t_tier` (core, probable, possible, disputed, unclassified), `t_basis`
 (a short reason), `t_positions` (dispersed, tandem or empty), and, when published pairs are given, `t_pairs_relaxed_n`,
 `t_pairs_strict_n`, `t_pairs_species`. Parsimony: `p_label` (gain 2, loss 1), `p_label_unit` (equal costs), `p_robust`,
 `p_margin`, `p_cost1` to `p_cost3`, and the event columns.
+
+
+## Draft additions in 0.10.1
+`t_category` (Lost duplicate; Both copies kept (best guess); Later duplicate, in cichlids; Later duplicate, before cichlids;
+Disputed; Unclassified), `t_when` (the level of a later duplicate before the cichlids: teleost, percomorph, ovalentaria; `;`-joined),
+and the call `later_duplicate_before_cichlids` in `t_call`; `t_row` is `R4` for it.

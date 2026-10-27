@@ -76,3 +76,11 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - The published lists are incomplete (about 40% of zebrafish genes named with an a or b are in them): a gene in a
   pair is evidence for one; a gene in no pair is not evidence against.
 - For the pipeline the OHNOLOGS files belong in the coordinator's inputs; until then they are given on the command line.
+
+
+## 0.10.1: simplified categories
+- Owner decisions: a zebrafish-only loss is not its own category; pair-like calls are one group, "Both copies kept
+  (best guess)", with the confidence kept in `t_tier`; everything not classified is one group, "Unclassified"; a category
+  is added for duplicates after the teleost root and before the cichlids that are not ohnologs.
+- The later-duplicate-before-cichlids rule needs tandem copies and no published pair because dispersed copies
+  (67% of the 909 candidate genes with two or more copies) look like a teleost-duplication pair kept in the percomorphs.

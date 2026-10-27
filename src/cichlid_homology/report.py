@@ -140,16 +140,18 @@ def write_report(summary: dict, path: Path) -> None:
           "the counts cannot fix; R5 a later cichlid duplicate. core = the share-based and parsimony calls agree; "
           "probable = one calls a pair and the gene is in a published pair; possible = one calls a pair and the copies "
           "are on different sequences (weak evidence); disputed = the calls conflict and nothing settles it; "
-          "outside = not scored, expanded family or many copies.", ""]
+          "unclassified = not scored, expanded family or many copies.", ""]
     for m in ("TreeFam", "Compara"):
         T = A["tiers"][m]
-        trs = [[r, d.get("core", 0), d.get("probable", 0), d.get("possible", 0), d.get("disputed", 0), d.get("outside", 0)]
+        trs = [[r, d.get("core", 0), d.get("probable", 0), d.get("possible", 0), d.get("disputed", 0), d.get("unclassified", 0)]
                for r, d in T["by_row_and_tier"].items()]
         ev = ("; pair-like genes in a published pair: %s%%" % T["pair_like_genes_in_a_published_pair_pct"]
               if T.get("published_pair_evidence_loaded") else "; published pairs not loaded (use --ohnologs)")
+        cats = [[c, sum(d.values()), d.get("core", 0), d.get("probable", 0), d.get("possible", 0)] for c, d in T["by_category"].items()]
+        L += [f"### {m}: simplified categories", "", _table(["category", "genes", "core", "probable", "possible"], cats), ""]
         L += [f"### {m}: {T['placed']} genes placed in a row: core {T['core']}, probable {T['probable']}, "
-              f"possible {T['possible']}, disputed {T['disputed']}{ev}. Outside the rows: {T['outside']}", "",
-              _table(["row", "core", "probable", "possible", "disputed", "outside"], trs), ""]
+              f"possible {T['possible']}, disputed {T['disputed']}{ev}. Unclassified: {T['unclassified']}", "",
+              _table(["row", "core", "probable", "possible", "disputed", "unclassified"], trs), ""]
     L += ["## Where the extra copies sit", "",
           "For genes with two or more focal-species copies in the reference clade: the nearest other copy is "
           "adjacent (no gene between), near (at most the set number of genes between), distant on the same "

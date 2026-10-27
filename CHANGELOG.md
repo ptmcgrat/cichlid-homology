@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.1 (simplified B1 categories, later duplicates before the cichlids)
+- `t_category` groups the tiers into six categories: Lost duplicate; Both copies kept (best guess) (R2, R3, probable
+  and possible pairs; a zebrafish-only loss is no longer its own category); Later duplicate, in cichlids; Later
+  duplicate, before cichlids; Disputed; Unclassified (one group; the reason stays in `t_call`). `t_tier` is the
+  confidence (core, probable, possible).
+- New: Later duplicate, before cichlids, with `t_when` (teleost, percomorph or ovalentaria level). The B1 definition
+  has three outcomes, the third being a duplicate unrelated to the teleost genome duplication, and that includes
+  duplicates between the teleost root and the cichlids. A gene qualifies when parsimony places a clade-level gain at
+  those levels, the gene has two or more copies, the copies are tandem, and no published pair holds it. The rule is
+  strict because counts cannot tell such a duplicate from a teleost-duplication pair kept in the percomorphs (on the
+  Compara table of 0.9.1 it finds 127 genes outside the other groups; 45 more already fall in cichlid duplicates
+  and 52 in many-copy genes).
+- Report: a simplified-category table per method. 123 offline tests.
+
 ## 0.10.0 (calibrated parsimony and confidence tiers for B1)
 - Parsimony costs are now a gain of 2 and a loss of 1 (`--gain-cost`, `--loss-cost`), chosen in 0.9.1's grid against
   published teleost-duplication pairs (OHNOLOGS v2): recall of known pairs 82% (63.6% with the old robust unit costs),
@@ -11,7 +25,7 @@
 - `tiers.py`: one row per gene in the confidence table for B1: `t_row` (R1 lost early; R2 both kept; R3 both kept,
   zebrafish lost one; R2/3/4 a pair whose depth the counts cannot fix; R5 later cichlid duplicate), `t_call`,
   `t_tier` (core: the share-based and parsimony calls agree; probable: one calls a pair and a published pair
-  agrees; possible: one calls a pair and the copies are on different sequences, weak evidence; disputed; outside:
+  agrees; possible: one calls a pair and the copies are on different sequences, weak evidence; disputed; unclassified:
   not scored, expanded family or many copies), `t_basis` and `t_positions`. No new cutoffs.
 - Report: a tiers section per method. Previewed on the Compara table of 0.9.1 (26,608 genes): 18,575 placed in a
   row: core 15,880 (85%), probable 356, possible 597, disputed 1,742 (9%); core lost duplicates are in a published

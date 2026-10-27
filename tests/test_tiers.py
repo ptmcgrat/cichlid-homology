@@ -39,10 +39,10 @@ def base(**kw):
     return r
 
 
-def test_outside_the_rows():
+def test_unclassified():
     assert assign(base(p_status="no_anchor"))["t_call"] == "no_anchor"
     assert assign(base(expanded_family="True"))["t_call"] == "expanded_family"
-    assert assign(base(p_label="multi_copy"))["t_tier"] == "outside"
+    assert assign(base(p_label="multi_copy"))["t_tier"] == "unclassified"
 
 
 def test_row_1_core_and_the_disputes_around_it():
@@ -82,5 +82,41 @@ def test_summary_counts_tiers_by_row():
                                                     **assign(base(b_label_raw="retained_pair", p_label="retained_ohnolog"))),
             dict(base(p_status="no_anchor"), **assign(base(p_status="no_anchor")))]
     t = tiers_summary(rows)
-    assert t["placed"] == 2 and t["core"] == 2 and t["outside"] == {"no_anchor": 1}
+    assert t["placed"] == 2 and t["core"] == 2 and t["unclassified"] == {"no_anchor": 1}
     assert t["by_row_and_tier"]["R1"] == {"core": 1} and t["published_pair_evidence_loaded"] is False
+
+
+def test_a_later_duplicate_before_the_cichlids_needs_a_clade_gain_tandem_copies_and_no_published_pair():
+    one = base(p_gain_levels="percomorph:1", orig_class="tandem_adjacent", orig_copies_n=2)
+    a = assign(one)
+    assert (a["t_call"], a["t_category"], a["t_tier"], a["t_when"]) == ("later_duplicate_before_cichlids", "Later duplicate, before cichlids", "possible", "percomorph")
+    assert assign(dict(one, p_gain_levels="teleost:1;ovalentaria:1"))["t_when"] == "teleost;ovalentaria"
+    assert assign(dict(one, orig_class="different_seqid"))["t_category"] == "Disputed"      # dispersed copies look like a pair
+    assert assign(dict(one, t_pairs_relaxed_n=1))["t_category"] == "Disputed"               # a published pair
+    assert assign(dict(one, orig_copies_n=1))["t_category"] == "Disputed"                   # one copy: nothing to see
+    assert assign(dict(one, p_gain_levels="percomorph(species):1"))["t_category"] == "Lost duplicate"
+    pair = assign(dict(one, b_label_raw="retained_pair"))                                    # a pair call overruled by tandem copies
+    assert pair["t_category"] == "Later duplicate, before cichlids"
+    assert assign(dict(one, p_label="ambiguous", b_label_raw="partial_retention"))["t_category"] == "Disputed"
+
+
+def test_the_simplified_categories():
+    pair = base(b_label_raw="retained_pair", p_label="retained_ohnolog")
+    assert assign(pair)["t_category"] == "Both copies kept (best guess)"
+    assert assign(dict(pair, p_loss_species="danio_rerio"))["t_category"] == "Both copies kept (best guess)"      # zebrafish lost is not its own category
+    assert assign(dict(base(b_label_raw="retained_pair", p_label="lost_duplicate"), t_pairs_relaxed_n=2))["t_category"] == "Both copies kept (best guess)"
+    assert assign(dict(base(b_label_raw="retained_pair", p_label="lost_duplicate"), orig_class="different_seqid"))["t_category"] == "Both copies kept (best guess)"
+    assert assign(base())["t_category"] == "Lost duplicate"
+    assert assign(base(b_label_raw="cichlid_specific_duplication", p_gain_levels="cichlid:1"))["t_category"] == "Later duplicate, in cichlids"
+    for kw in (dict(p_status="no_anchor"), dict(expanded_family="True"), dict(p_label="multi_copy")):
+        assert assign(base(**kw))["t_category"] == "Unclassified"
+
+
+def test_summary_counts_the_simplified_categories():
+    rows = []
+    for kw in (dict(), dict(b_label_raw="retained_pair", p_label="retained_ohnolog"), dict(p_status="no_anchor"), dict(expanded_family="True")):
+        r = base(**kw)
+        r.update(assign(r))
+        rows.append(r)
+    t = tiers_summary(rows)["by_category"]
+    assert t["Lost duplicate"] == {"core": 1} and t["Both copies kept (best guess)"] == {"core": 1} and t["Unclassified"] == {"unclassified": 2}
