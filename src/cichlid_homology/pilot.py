@@ -177,9 +177,16 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
     if prm.ohnologs_dir:
         try:
             pair_sets = load_pair_sets(prm.ohnologs_dir)
-        except Exception:
-            summary["ohnologs_error"] = traceback.format_exc()[-800:]
+            if not pair_sets:
+                found = sorted(x.name for x in Path(prm.ohnologs_dir).expanduser().iterdir())[:8]
+                raise ValueError(f"no OHNOLOGS pair files recognised in {prm.ohnologs_dir} (expected e.g. drerio_Pairs_Strict_3R.txt "
+                                 f"or drerio.Pairs.Strict.3R.txt); the folder holds: {found}")
+        except Exception as e:
+            summary["ohnologs_error"] = str(e)
+            print(f"WARNING: published pairs NOT loaded: {e}", file=sys.stderr)
         summary["ohnologs_species_loaded"] = sorted(pair_sets)
+        if pair_sets:
+            print("published pairs loaded for: " + ", ".join(sorted(pair_sets)), file=sys.stderr)
     for part in PARTS:
         t0 = time.time()
         if all_genes:

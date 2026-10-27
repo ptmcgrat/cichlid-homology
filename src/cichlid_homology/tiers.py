@@ -10,8 +10,10 @@ gave 79% at 0.7%). Rows follow the seven histories of docs/NOTES.md:
     R5  a later duplicate in cichlids                      identical counts; rows 6 and 7 cannot be told from them)
 
 Tiers: `core` (both calls agree); `probable` (exactly one calls a pair and the gene is in a published pair, which is
-independent evidence); `possible` (exactly one calls a pair and the copies are on different sequences, which is weak
-evidence: among genes that are not pairs, 45 to 58% of those with two copies are also on different sequences);
+independent evidence); `possible` (exactly one calls a pair and either the copies are on different sequences, which is weak
+evidence: among genes that are not pairs, 45 to 58% of those with two copies are also on different sequences, or the
+gene tree shows a pair, `d_call` = pair: two lineages at the teleost level sharing half their species, which on the genes
+where the counts disagree was in a published pair 2.5 times as often as for genes with no evidence);
 `disputed` (the calls conflict and nothing settles it, or the copies are tandem); `unclassified` (not scored, expanded
 family, or many copies). No share cutoffs are added here.
 
@@ -107,8 +109,10 @@ def _assign(row: dict) -> dict:
         other = f"parsimony says {p or 'nothing'}" if pair_t else f"thresholds say {thr or 'nothing'}"
         if pub:
             return res("R2/3/4", "retained_pair", "probable", f"{who} say a pair, {other}; in a published pair in {pub} of 4 species")
-        if pos == "dispersed":
-            return res("R2/3/4", "retained_pair", "possible", f"{who} say a pair, {other}; copies on different sequences (weak evidence)")
+        tree = str(row.get("d_call")) == "pair"
+        if pos == "dispersed" or tree:
+            ev = " and ".join(x for x, y in (("copies on different sequences", pos == "dispersed"), ("the gene tree shows a pair", tree)) if y)
+            return res("R2/3/4", "retained_pair", "possible", f"{who} say a pair, {other}; {ev} (weak evidence)")
         if when:
             return before()
         why = "copies are tandem and in no published pair" if pos == "tandem" else "no independent evidence"

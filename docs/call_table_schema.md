@@ -56,3 +56,7 @@ and the call `later_duplicate_before_cichlids` in `t_call`; `t_row` is `R4` for 
 `d_status` (ok, no_anchor, no_teleost, one_teleost_gene, one_teleost_species, teleosts_not_monophyletic), `d_call`, `d_root`
 (pair or single), `d_root_level`, `d_support`, `d_lineages`, `d_overlap`, `d_gene_lineage`, `d_focal_lineages`, `d_later_levels`,
 `d_first_later_level`, `d_species_dups`, `d_carriers`, `d_carrier_n`.
+
+
+## Changes in 0.11.1
+`d_root` is `pair`, `thin`, `disjoint` or `single`; `d_call` adds `thin_pair`; `d_status` no longer has `teleosts_not_monophyletic`.

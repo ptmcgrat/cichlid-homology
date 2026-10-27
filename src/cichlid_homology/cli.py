@@ -118,7 +118,7 @@ def _pilot(args) -> int:
                  mostly_one_to_one=args.mostly, k_roots=args.k_roots,
                  kept_frac=args.kept, lost_frac=args.lost, tandem_max_gap=args.tandem_gap,
                  parsimony_grid=args.parsimony_grid, gain_cost=args.gain_cost, loss_cost=args.loss_cost,
-                 ohnologs_dir=args.ohnologs or "")
+                 ohnologs_dir=args.ohnologs or "", pair_overlap=args.pair_overlap)
     species = [x.strip() for x in args.species.split(",") if x.strip()]
     alt = [] if args.all else [float(x) for x in args.alt_overlap.split(",") if x]
     if args.all:
@@ -245,6 +245,8 @@ def main(argv=None) -> int:
     p.add_argument("--lost", type=float, default=0.3, help="share below which the extra copy counts as absent")
     p.add_argument("--parsimony-grid", action="store_true",
                    help="also label every gene by parsimony under a grid of gain/loss costs (for calibration; slower)")
+    p.add_argument("--pair-overlap", type=float, default=0.5,
+                   help="tree dating: share of species two lineages must have in common to count as a pair")
     p.add_argument("--gain-cost", type=int, default=2, help="parsimony: cost of a gained copy (a loss costs --loss-cost)")
     p.add_argument("--loss-cost", type=int, default=1)
     p.add_argument("--ohnologs", default=None,

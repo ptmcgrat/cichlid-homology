@@ -44,6 +44,9 @@ def write_report(summary: dict, path: Path) -> None:
          "Categories count reference genes : focal genes in the smallest clade holding the gene and a reference gene "
          "(focal = the focal species only). `None` = no gene of that reference species in this method's tree. "
          "Human: Other = ManyToOne + ManyToMany. Zebrafish: OneToMany = 1:2 and 1:many, Other = many:1 and many:many.", "",
+         *( [f"**WARNING: the published pairs were not loaded** ({summary['ohnologs_error']}). The tiers have no "
+             "published-pair evidence: no `probable` genes.", ""] if summary.get("ohnologs_error") else
+            [f"Published pairs loaded for: {', '.join(summary['ohnologs_species_loaded'])}.", ""] if summary.get("ohnologs_species_loaded") else []),
          "## Overall numbers", "",
          _table(["", "TreeFam", "Compara"],
                 [["genes called", A["genes_called"]["TreeFam"], A["genes_called"]["Compara"]],
@@ -152,12 +155,13 @@ def write_report(summary: dict, path: Path) -> None:
         L += [f"### {m}: {T['placed']} genes placed in a row: core {T['core']}, probable {T['probable']}, "
               f"possible {T['possible']}, disputed {T['disputed']}{ev}. Unclassified: {T['unclassified']}", "",
               _table(["row", "core", "probable", "possible", "disputed", "unclassified"], trs), ""]
-    L += ["## Tree-based dating (0.11.0)", "",
-          "Each gene's family tree is reconciled with the master species tree: the teleost genes of the anchor clade form "
-          "one lineage (`single`, a lost duplicate) or two or more (`pair`, a duplication at the teleost root). "
-          "`d_support` says whether early teleosts are on both sides; `d_overlap` is the share of species the two "
-          "largest lineages have in common (small = little to support the pair, or a stray gene). In a placement tree "
-          "(TreeFam, Compara) duplications among project genes cannot be seen, so only the reference species date them.", ""]
+    L += ["## Tree-based dating", "",
+          "Each gene's family tree is reconciled with the master species tree. The teleost clade of the gene is one lineage "
+          "(`single`, a lost duplicate) or splits into lineages. A split counts as a `pair` only if the two largest lineages "
+          "share at least half of their species (`d_overlap`; the histogram below has a valley there); `thin` = they share "
+          "some, less than half (a few genes, or a stray gene); `disjoint` = no species in common (the gene tree disagrees "
+          "with the species tree, or reciprocal losses: counts cannot tell these apart). In a placement tree (TreeFam, "
+          "Compara) duplications among project genes cannot be seen, so only the reference species date them.", ""]
     for m in ("TreeFam", "Compara"):
         D = A["treedate"][m]
         if not D.get("scored"):
@@ -165,7 +169,8 @@ def write_report(summary: dict, path: Path) -> None:
             continue
         L += [f"### {m}: {D['scored']} of {D['genes']} genes dated ({D['status']})", "",
               f"Calls: {D['calls']}. Pair support (early teleosts on both sides, one side, none): {D['pair_support']}. "
-              f"Level of the duplication node at the teleost root: {D['pair_root_level']}. Pairs with M. zebra genes in two or "
+              f"Root classes: {D['root_classes']}. Overlap of the two largest lineages (0, under 0.1, ..., 0.9 and over): "
+              f"{D['overlap_histogram_tenths']}. Pairs with M. zebra genes in two or "
               f"more lineages: {D['pairs_with_focal_species_in_two_or_more_lineages']}.", ""]
         cats = sorted(D["by_category"])
         calls = list(D["calls"])

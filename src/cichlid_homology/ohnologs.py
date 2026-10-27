@@ -1,7 +1,8 @@
 """Published teleost-duplication pairs (OHNOLOGS v2, Singh and Isambert 2020, NAR 48:D724) as independent evidence.
 
 The pairs come from macro-synteny against outgroups, so they do not depend on our gene trees or counts. The
-files are given by the owner on the command line (a folder holding `<species>_Pairs_<Strict|Intermediate|Relaxed>_3R.txt`
+files are given by the owner on the command line (a folder holding `<species>_Pairs_<Strict|Intermediate|Relaxed>_3R.txt`,
+with `_` or `.` between the parts
 for drerio, olatipes, gaculeatus, tnigroviridis); nothing is downloaded here. Only protein-coding pairs dated to the
 fish genome duplication are used. Genes are matched by symbol: the zebrafish best gene of the family (reliable
 names only) for zebrafish, and the gene's own annotated symbol for medaka, stickleback and Tetraodon. The published
@@ -10,6 +11,7 @@ evidence against a pair; a gene in a pair is evidence for one."""
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 SPECIES = {"drerio": "zebrafish", "olatipes": "medaka", "gaculeatus": "stickleback", "tnigroviridis": "tetraodon"}
@@ -30,16 +32,28 @@ def _symbols(path) -> set:
     return out
 
 
+_NAME = re.compile(r"^(?P<sp>" + "|".join(SPECIES) + r")[._]Pairs[._](?P<lvl>Strict|Intermediate|Relaxed)[._]3R\.txt$", re.I)
+
+
+def find_files(directory) -> dict:
+    """{(species code, level): path} for the pair files in a folder; `_` or `.` may separate the parts."""
+    d = Path(directory).expanduser()
+    if not d.is_dir():
+        raise FileNotFoundError(f"{d} is not a folder")
+    out = {}
+    for f in sorted(d.iterdir()):
+        m = _NAME.match(f.name)
+        if m:
+            out[(m["sp"].lower(), m["lvl"].capitalize())] = f
+    return out
+
+
 def load_pair_sets(directory) -> dict:
     """{species: {"strict": set, "relaxed": set}} for the files found in the folder; {} when there are none."""
-    d = Path(directory).expanduser()
+    files = find_files(directory)
     sets = {}
     for code, name in SPECIES.items():
-        got = {}
-        for lvl in LEVELS:
-            f = d / f"{code}_Pairs_{lvl}_3R.txt"
-            if f.is_file():
-                got[lvl.lower()] = _symbols(f)
+        got = {lvl.lower(): _symbols(files[(code, lvl)]) for lvl in LEVELS if (code, lvl) in files}
         if got:
             sets[name] = {"strict": got.get("strict", set()), "relaxed": got.get("relaxed", got.get("strict", set()))}
     return sets

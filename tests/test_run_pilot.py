@@ -163,3 +163,13 @@ def test_tree_based_dating_in_the_whole_pilot(tmp_path):
     D = summary["A"]["treedate"]["TreeFam"]
     assert D["scored"] == 5 and D["calls"]["pair"] == 2 and D["by_category"]["Both copies kept (best guess)"] == {"pair": 2}
     assert "## Tree-based dating" in (out / "pilot_report.md").read_text()
+
+
+def test_a_folder_with_no_pair_files_is_reported_in_the_summary_and_the_report(tmp_path):
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    (empty / "a.txt").write_text("x")
+    (tmp_path / "second").mkdir()
+    summary, out = run(tmp_path / "second", all_genes=True, prm=Params(ohnologs_dir=str(empty)))
+    assert "no OHNOLOGS pair files recognised" in summary["ohnologs_error"] and summary["ohnologs_species_loaded"] == []
+    assert "published pairs were not loaded" in (out / "pilot_report.md").read_text()

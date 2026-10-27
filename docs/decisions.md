@@ -96,3 +96,15 @@ large clades (expanded families), and whether to tell the coordinator that the s
   sides, and the overlap of the disputed genes.
 - When OrthoFinder arrives its trees are full trees of our own genes, so the same code also dates duplications
   among project genes (B2 carriers).
+
+
+## 0.11.1: what the first tree-dating run showed
+- On Compara (place mode) the tree call is weaker than counts on its own: among dated genes, thresholds recall 89.6% of
+  published-pair positives at 0.5% false positives; a tree pair with overlap of 0.5 or more recalls 63.7% at 0.4%. Reconciliation
+  alone ("any pair") called 99.8% of positives and 99.7% of negatives a pair, so shared species are required.
+- Its value is for the genes where counts disagree: there a tree pair is the best independent signal (likelihood ratio 2.5).
+  "Tree OR thresholds" scored J = 85.0 against 83.2 for thresholds alone.
+- Most of the information is in the reference species. The real gain is expected on OrthoFinder, where the tree holds our
+  own genes (duplications among project genes, carriers for B2) and all ten cichlids.
+- Check on the 0.11.0 run: `t_pairs_*` were empty, so the published pairs were not loaded (the run was probably made without
+  `--ohnologs`, or the folder did not hold the files); the categories of that run lack the probable tier.

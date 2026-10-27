@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.11.2 (published-pair files: both name styles, and a loud failure)
+- The OHNOLOGS loader missed the files on mzebra (`drerio.Pairs.Strict.3R.txt`) because it expected underscores
+  (`drerio_Pairs_Strict_3R.txt`): nothing was loaded and nothing was said, so the 0.11.0 run had no published-pair evidence.
+  `_` or `.` may now separate the parts.
+- `--ohnologs` with a folder that holds no recognisable pair file, or that does not exist, now prints a warning, records
+  `ohnologs_error` in the summary and puts a warning at the top of the report. On success the run prints which species were
+  loaded and the report says so. 140 offline tests.
+
+## 0.11.1 (tree dating: shared species make a pair; the gene's own teleost clade)
+- First run on Compara (0.11.0) found two faults. (1) A duplication by reconciliation is not evidence of a pair: the gene
+  tree often disagrees with the master species tree (a polytomy among the early teleosts), and 98% of genes that counts and
+  parsimony agree are lost duplicates came out as pairs, 93% of those with lineages that share no species. (2) A quarter of
+  genes could not be dated because the lowest ancestor of all teleost genes of a large anchor clade also held tetrapod genes
+  of other paralogs.
+- A pair now needs the two largest lineages to share at least half of their species (`--pair-overlap`, 0.5; the overlap
+  histogram has a valley between 0.3 and 0.5). `d_root` is `pair`, `thin` (some shared species, less than half), `disjoint`
+  (none: gene-tree incongruence or reciprocal losses; counts cannot tell these apart) or `single`; `d_call` adds `thin_pair`.
+- The teleost root is the highest ancestor of the gene inside the anchor clade that holds no non-teleost jawed vertebrate
+  (the gene's own teleost clade); the `teleosts_not_monophyletic` status is gone.
+- Tiers: a gene tree that shows a pair (`d_call` = pair) is weak independent evidence and gives the `possible` tier. On the
+  Compara 0.11.0 table, among the genes where the counts disagree, a tree pair with overlap of 0.5 or more was in a published
+  pair 39.6% of the time against 15.6% for genes with no evidence (likelihood ratio 2.5; copies on different sequences 1.4).
+- Report: root classes and the overlap histogram. 138 offline tests.
+
 ## 0.11.0 (tree-based dating of duplications)
 - `treedate.py`: a third line of evidence for B1 and B2, read from the shape of the rooted gene tree. The tree is
   reconciled with the master species tree: a node is a duplication when the lowest common ancestor (in the species

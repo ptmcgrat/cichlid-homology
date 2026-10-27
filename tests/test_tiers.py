@@ -19,7 +19,6 @@ def test_the_pair_files_keep_only_protein_coding_fish_genome_duplication_pairs_w
     s = load_pair_sets(tmp_path)
     assert set(s) == {"zebrafish", "medaka"}
     assert s["zebrafish"]["strict"] == {"phf12a", "phf12b"} and s["zebrafish"]["relaxed"] == {"phf12a", "phf12b", "clstn2"}
-    assert load_pair_sets(tmp_path / "missing") == {}
 
 
 def test_support_counts_the_species_whose_published_pairs_hold_the_gene(tmp_path):
@@ -120,3 +119,32 @@ def test_summary_counts_the_simplified_categories():
         rows.append(r)
     t = tiers_summary(rows)["by_category"]
     assert t["Lost duplicate"] == {"core": 1} and t["Both copies kept (best guess)"] == {"core": 1} and t["Unclassified"] == {"unclassified": 2}
+
+
+def test_a_pair_in_the_gene_tree_is_weak_evidence_for_the_possible_tier():
+    one = base(b_label_raw="retained_pair", p_label="lost_duplicate", orig_class="tandem_adjacent")
+    assert assign(one)["t_tier"] == "disputed"
+    a = assign(dict(one, d_call="pair"))
+    assert (a["t_tier"], a["t_category"]) == ("possible", "Both copies kept (best guess)") and "gene tree shows a pair" in a["t_basis"]
+    assert assign(dict(one, d_call="pair", t_pairs_relaxed_n=1))["t_tier"] == "probable"     # a published pair still wins
+    assert assign(dict(one, d_call="thin_pair"))["t_tier"] == "disputed"
+
+
+def test_the_pair_files_may_use_dots_or_underscores_and_a_wrong_folder_is_reported(tmp_path):
+    from cichlid_homology.ohnologs import find_files
+    d = tmp_path / "dots"
+    d.mkdir()
+    for lvl in ("Strict", "Relaxed"):
+        (d / f"drerio.Pairs.{lvl}.3R.txt").write_text(HEAD + "E1\tE2\tphf12a\tphf12b\t1e-9\t1e-5\t7\tFishWGD\tprotein_coding\n")
+    (d / "notes.txt").write_text("not a pair file")
+    assert set(find_files(d)) == {("drerio", "Strict"), ("drerio", "Relaxed")}
+    assert load_pair_sets(d)["zebrafish"]["strict"] == {"phf12a", "phf12b"}
+    other = tmp_path / "empty"
+    other.mkdir()
+    (other / "readme.txt").write_text("x")
+    assert load_pair_sets(other) == {}
+    try:
+        find_files(tmp_path / "missing")
+        raise AssertionError("a missing folder must raise")
+    except FileNotFoundError:
+        pass

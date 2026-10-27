@@ -49,10 +49,11 @@ def test_a_new_duplicate_in_the_percomorphs_is_a_later_duplicate_not_a_pair():
     assert r["d_later_levels"].startswith("percomorph:")
 
 
-def test_reciprocal_losses_make_a_pair_although_every_species_has_one_copy():
+def test_lineages_that_share_no_species_are_disjoint_not_a_pair():
+    """Reciprocal losses and a gene tree that disagrees with the species tree look the same: no shared species."""
     a, b = "(Aang_1,(Trub_1,Mzeb_1))", "(Drer_1,(Olat_1,Acal_1))"
     r = run(f"({OUT},({a},{b}));", "Mzeb_1")
-    assert (r["d_root"], r["d_support"], r["d_call"]) == ("pair", "both_early", "pair")
+    assert (r["d_root"], r["d_support"], r["d_overlap"], r["d_call"]) == ("disjoint", "both_early", 0.0, "lost_duplicate")
     assert r["d_focal_lineages"] == 1                         # M. zebra itself holds one of the two lineages
 
 
@@ -68,9 +69,18 @@ def test_a_duplicate_inside_one_species_is_species_level_and_not_a_later_duplica
     assert r["d_species_dups"] == 1 and r["d_first_later_level"] == "" and r["d_call"] == "lost_duplicate"
 
 
-def test_teleosts_that_are_not_one_clade_are_reported_not_dated():
-    r = run("((Hsap_1,(Aang_1,Locu_1)),(Drer_1,((Trub_1,Gacu_1),(Olat_1,(Mzeb_1,Acal_1)))));", "Mzeb_1")
-    assert r["d_status"] == "teleosts_not_monophyletic" and r["d_call"] == ""
+def test_other_paralog_lineages_with_their_tetrapod_genes_do_not_get_in_the_way():
+    """A clade holding two 2R paralog lineages, each with a tetrapod gene: g's own teleost clade is what is dated."""
+    rt = rtree(f"(({OUT},{fish(1)}),((Hsap_2,Locu_2),{fish(2)}));")
+    g = leaf(rt, "Mzeb_1")
+    ctx = ParsimonyContext(st(), FakeClades(), 6)
+    r = treedate_profile(rt, g, ("human", rt.root), ctx, "denovo", None)
+    assert r["d_status"] == "ok" and r["d_root"] == "single" and r["d_call"] == "lost_duplicate"
+
+
+def test_a_gene_with_no_teleost_neighbour_is_not_dated():
+    r = run(f"({OUT},(Locu_2,Mzeb_1));", "Mzeb_1")
+    assert r["d_status"] == "one_teleost_gene" and r["d_call"] == ""
 
 
 def test_in_a_placement_tree_project_genes_are_assigned_to_a_lineage_but_do_not_create_duplications():
@@ -86,7 +96,7 @@ def test_in_a_placement_tree_project_genes_are_assigned_to_a_lineage_but_do_not_
 def test_summary_counts_calls_and_support():
     rows = [dict(run(f"({OUT},({fish(1)},{fish(2)}));", "Mzeb_1"), t_category="Both copies kept (best guess)"),
             dict(run(f"({OUT},{fish(1)});", "Mzeb_1"), t_category="Lost duplicate"),
-            dict(run("((Hsap_1,(Aang_1,Locu_1)),(Drer_1,(Mzeb_1,Acal_1)));", "Mzeb_1"))]
+            dict(run(f"({OUT},(Locu_2,Mzeb_1));", "Mzeb_1"))]
     s = treedate_summary(rows)
     assert s["scored"] == 2 and s["calls"] == {"pair": 1, "lost_duplicate": 1} and s["pair_support"] == {"both_early": 1}
     assert s["pairs_with_focal_species_in_two_or_more_lineages"] == 1
@@ -101,8 +111,18 @@ def test_the_overlap_separates_a_retained_pair_from_reciprocal_losses_and_from_a
     # a percomorph-only duplicate with one stray early-teleost gene (Aang_2) inside a percomorph clade: a false pair at the root
     p1, p2 = "((Trub_1,Gacu_1),(Olat_1,(Mzeb_1,Acal_1),Aang_2))", "((Trub_2,Gacu_2),(Olat_2,(Mzeb_2,Acal_2)))"
     stray = run(f"({OUT},(Aang_1,(Drer_1,({p1},{p2}))));", "Mzeb_1")
-    assert stray["d_root"] == "pair" and stray["d_overlap"] < 0.2             # the pair is there, with almost nothing to support it
+    assert stray["d_root"] == "thin" and stray["d_overlap"] < 0.2 and stray["d_call"] == "thin_pair"   # almost nothing supports it
     # a stray early-teleost gene of another species (Drer_2) does not make a pair: it only lowers the level of the later duplicate
     p1b = "((Trub_1,Gacu_1),(Olat_1,(Mzeb_1,Acal_1),Drer_2))"
     weak = run(f"({OUT},(Aang_1,(Drer_1,({p1b},{p2}))));", "Mzeb_1")
     assert weak["d_root"] == "single" and weak["d_first_later_level"] == "teleost"
+
+
+def test_the_overlap_cutoff_is_a_parameter():
+    one = run(f"({OUT},({fish(1)},((Trub_2,Gacu_2),(Olat_2,(Mzeb_2,Acal_2)))));", "Mzeb_2")
+    assert one["d_root"] == "pair"                                         # overlap 5 / 7
+    rt = rtree(f"({OUT},({fish(1)},((Trub_2,Gacu_2),(Olat_2,(Mzeb_2,Acal_2)))));")
+    g = leaf(rt, "Mzeb_2")
+    ctx = ParsimonyContext(st(), FakeClades(), 6)
+    strict = treedate_profile(rt, g, anchor_for(rt, g, FakeClades(), None), ctx, "denovo", None, 0.9)
+    assert strict["d_root"] == "thin" and strict["d_call"] == "thin_pair"

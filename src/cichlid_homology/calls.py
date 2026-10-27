@@ -60,7 +60,7 @@ def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str,
         if prm.parsimony:
             row.update(parsimony_profile(rt, g, anchor, pctx))
         if prm.treedate:
-            row.update(treedate_profile(rt, g, anchor, pctx, tree_mode, prefixes))
+            row.update(treedate_profile(rt, g, anchor, pctx, tree_mode, prefixes, prm.pair_overlap))
     tp = teleost_pattern(rt, g, own, prm.overlap_t, lambda s: level_of_species(clades, s))
     row.update({f"teleost_{k}": v for k, v in tp.items()})
     return row
