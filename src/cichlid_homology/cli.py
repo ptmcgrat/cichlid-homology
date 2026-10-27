@@ -116,7 +116,8 @@ def _pilot(args) -> int:
     base = Path(args.out).expanduser() if args.out else default_out("pilot")
     prm = Params(overlap_t=args.overlap, min_levels_each_side=args.min_levels,
                  mostly_one_to_one=args.mostly, k_roots=args.k_roots,
-                 kept_frac=args.kept, lost_frac=args.lost, tandem_max_gap=args.tandem_gap)
+                 kept_frac=args.kept, lost_frac=args.lost, tandem_max_gap=args.tandem_gap,
+                 parsimony_grid=args.parsimony_grid)
     species = [x.strip() for x in args.species.split(",") if x.strip()]
     alt = [] if args.all else [float(x) for x in args.alt_overlap.split(",") if x]
     if args.all:
@@ -241,6 +242,8 @@ def main(argv=None) -> int:
     p.add_argument("--tandem-gap", type=int, default=10, help="genes between two copies at or below which they are tandem")
     p.add_argument("--kept", type=float, default=0.5, help="share of species with 2+ copies counted as kept")
     p.add_argument("--lost", type=float, default=0.3, help="share below which the extra copy counts as absent")
+    p.add_argument("--parsimony-grid", action="store_true",
+                   help="also label every gene by parsimony under a grid of gain/loss costs (for calibration; slower)")
     p.add_argument("--out", default=None, help="default: ~/share/pilot_<version>_<timestamp>")
     p.set_defaults(func=_pilot)
     ex = sub.add_parser("explain", help="show the evidence behind one gene's call")

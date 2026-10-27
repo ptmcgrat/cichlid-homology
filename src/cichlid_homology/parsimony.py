@@ -26,6 +26,15 @@ INF = 10 ** 6
 JAWED = ("gnathostome", "teleost", "percomorph", "ovalentaria", "cichlid")
 LABEL = {1: "lost_duplicate", 2: "retained_ohnolog", 3: "multi_copy"}
 COST_SETS = ((1, 1), (1, 2), (2, 1))          # (cost of a gain, cost of a loss)
+# calibration grid (optional): (cost of a gain, cost of a loss, teleost duplication free)
+GRID = tuple((g, 1, free) for free in (False, True) for g in (1, 2, 3, 4, 6, 8))
+
+
+def grid_name(g: int, l: int, free: bool) -> str:
+    return f"g{g}l{l}" + ("f" if free else "")
+
+
+GRID_COLS = [f"pg_{grid_name(*x)}" for x in GRID] + [f"pgm_{grid_name(*x)}" for x in GRID]
 
 
 def trans_matrix(K: int, dup: int, loss: int):
@@ -38,6 +47,16 @@ def trans_matrix(K: int, dup: int, loss: int):
                 t[p][c] = dup * (c - p)
             else:
                 t[p][c] = loss * (p - c)
+    return t
+
+
+def trans_matrix_wgd(K: int, dup: int, loss: int):
+    """The branch above the teleost ancestor: one extra copy is free (the genome duplication doubles every
+    gene); further gains and all losses cost as usual."""
+    t = trans_matrix(K, dup, loss)
+    for p in range(1, K + 1):
+        for c in range(p + 1, K + 1):
+            t[p][c] = dup * (c - p - 1)
     return t
 
 
@@ -104,7 +123,7 @@ def _is_ancestor(a, v, parent):
     return False
 
 
-def _tables(pt, obs, K, trans, forced=None, want_arg=False):
+def _tables(pt, obs, K, trans, forced=None, want_arg=False, tT=None):
     R = range(K + 1)
     n = len(pt.children)
     f, g = [None] * n, [None] * n
@@ -120,20 +139,22 @@ def _tables(pt, obs, K, trans, forced=None, want_arg=False):
             f[v] = [f[v][x] if x == forced else INF for x in R]
         if v != pt.root:
             fv = f[v]
-            best = [min(range(K + 1), key=lambda c, p=p: (trans[p][c] + fv[c], c)) for p in R]
-            g[v] = [min(INF, trans[p][best[p]] + fv[best[p]]) for p in R]
+            tv = tT if (tT is not None and v == pt.T) else trans
+            best = [min(range(K + 1), key=lambda c, p=p: (tv[p][c] + fv[c], c)) for p in R]
+            g[v] = [min(INF, tv[p][best[p]] + fv[best[p]]) for p in R]
             if want_arg:
                 arg[v] = best
     return f, g, arg
 
 
-def _cost_forced(pt, f, g, s, K, trans, root_state=1):
+def _cost_forced(pt, f, g, s, K, trans, root_state=1, tT=None):
     R = range(K + 1)
     T = pt.T
     cur_f = [f[T][x] if x == s else INF for x in R]
     if T == pt.root:
         return cur_f[root_state]
-    cur_g = [min(INF, min(trans[p][c] + cur_f[c] for c in R)) for p in R]
+    t0 = tT if tT is not None else trans
+    cur_g = [min(INF, min(t0[p][c] + cur_f[c] for c in R)) for p in R]
     node = T
     while True:
         parent = pt.parent[node]
@@ -153,14 +174,17 @@ def classify(costs: dict):
 
 
 class ParsimonyContext:
-    def __init__(self, st, clades, kcap: int = 6):
+    def __init__(self, st, clades, kcap: int = 6, grid=()):
         self.st, self.clades, self.K = st, clades, kcap
         self.children = [[] for _ in st.parent]
         for i, p in enumerate(st.parent):
             if p >= 0:
                 self.children[p].append(i)
         self._level, self._pt, self._cache = {}, {}, {}
-        self.trans = {cs: trans_matrix(kcap, *cs) for cs in COST_SETS}
+        self.grid = tuple(grid)
+        sets = set(COST_SETS) | {(g, l) for g, l, _ in self.grid}
+        self.trans = {cs: trans_matrix(kcap, *cs) for cs in sets}
+        self.trans_free = {cs: trans_matrix_wgd(kcap, *cs) for cs in sets}
 
     def level(self, sp):
         if sp not in self._level:
@@ -198,9 +222,10 @@ class ParsimonyContext:
                    p_outgroup_single=sum(1 for s in out_sp if counts.get(s, 0) == 1))
         return res
 
-    def _costs(self, pt, obs, cs):
-        f, g, _ = _tables(pt, obs, self.K, self.trans[cs])
-        return {s: _cost_forced(pt, f, g, s, self.K, self.trans[cs]) for s in (1, 2, 3)}
+    def _costs(self, pt, obs, cs, free=False):
+        tT = self.trans_free[cs] if free else None
+        f, g, _ = _tables(pt, obs, self.K, self.trans[cs], tT=tT)
+        return {s: _cost_forced(pt, f, g, s, self.K, self.trans[cs], tT=tT) for s in (1, 2, 3)}
 
     def _score(self, pt, obs_loss, obs_miss):
         per_cs = {cs: self._costs(pt, obs_loss, cs) for cs in COST_SETS}
@@ -214,6 +239,10 @@ class ParsimonyContext:
                "p_margin": margin, "p_cost1": unit[1], "p_cost2": unit[2], "p_cost3": unit[3],
                "p_label_missing": label_miss, "p_margin_missing": margin_miss,
                "p_zero_modes_agree": (label_miss == label_unit) if label_unit != "ambiguous" and label_miss != "ambiguous" else ""}
+        for g, l, free in self.grid:
+            lab, mar = classify(self._costs(pt, obs_loss, (g, l), free))
+            res[f"pg_{grid_name(g, l, free)}"] = lab
+            res[f"pgm_{grid_name(g, l, free)}"] = mar
         res.update(self._events(pt, obs_loss, label_unit, unit))
         return res
 

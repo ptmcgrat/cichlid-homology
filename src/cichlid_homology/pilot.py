@@ -25,7 +25,7 @@ from .orthology import RTree, relationship
 from .read import load_family, read_tsv
 from .rooting import root_tree
 from .origin import attach_origin
-from .parsimony import ParsimonyContext
+from .parsimony import GRID, GRID_COLS, ParsimonyContext
 from .owngenes import gene_order, own_genes
 from .quality import attach_quality
 from .species import SHADOW_RULE, drop_shadowed, load_leaf_species
@@ -67,7 +67,7 @@ ORIG_COLS = ["orig_basis", "orig_copies_n", "orig_class", "orig_nearest_copy", "
              "orig_copies_same_seqid", "orig_copy_ids"]
 QUAL_COLS = ["risk_flags", "n_risk_flags", "gt_partial", "gt_low_quality", "gt_internal_stops",
              "gt_protein_length", "gt_description"]
-COLUMNS = BASE_COLS + A_COLS + B_COLS + P_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+COLUMNS = BASE_COLS + A_COLS + B_COLS + P_COLS + GRID_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
 SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 
@@ -168,7 +168,7 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
         genes, order, own = {}, {}, {}
         summary["own_genes_error"] = traceback.format_exc()[-800:]
     all_rows = {}
-    pctx = ParsimonyContext(st, clades, prm.parsimony_kcap) if prm.parsimony else None
+    pctx = ParsimonyContext(st, clades, prm.parsimony_kcap, GRID if prm.parsimony_grid else ()) if prm.parsimony else None
     for part in PARTS:
         t0 = time.time()
         if all_genes:

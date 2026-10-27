@@ -23,6 +23,7 @@ class Params:
     tandem_max_gap: int = 10        # genes between two copies at or below which they count as tandem
     parsimony: bool = True          # score the clade copy numbers by parsimony on the species tree
     parsimony_kcap: int = 6         # copy numbers above this are treated as this many
+    parsimony_grid: bool = False    # also label every gene under a grid of gain/loss costs (calibration)
 
 
 def level_of_species(clades, sp):

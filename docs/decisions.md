@@ -50,3 +50,11 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - Relative cost of a gain and a loss: 1:1 by default; a call must hold at 1:2 and 2:1 or it is `ambiguous`.
 - Zero counts: scored both as losses and as missing data; the report says how often they differ. OPEN: which to use.
 - Next, if the scoring works: scan every internal node of every tree for clades with these patterns.
+
+
+## 0.9.1: calibrating the parsimony costs
+- The costs of a gain and a loss are priors. Counts cannot separate "a pair at the teleost root with early losses"
+  from "a new duplicate later", so no cost setting resolves every gene; the grid shows how far costs go.
+- Next: score the grid against the published pairs (OHNOLOGS v2, zebrafish; medaka, stickleback and Tetraodon once
+  their genes are mapped) and pick the setting that agrees best; use gene-level evidence (positions, published
+  pairs) for the cases that remain.

@@ -111,3 +111,37 @@ def test_no_outgroup_and_too_few_teleosts():
 def test_classify_ties_are_ambiguous():
     assert classify({1: 3, 2: 3, 3: 9}) == ("ambiguous", 0)
     assert classify({1: 0, 2: 4, 3: 9}) == ("lost_duplicate", 4)
+
+
+def test_wgd_matrix_makes_one_extra_copy_free_on_the_teleost_branch_only():
+    from cichlid_homology.parsimony import trans_matrix_wgd
+    t = trans_matrix_wgd(4, 3, 1)
+    assert t[1][2] == 0 and t[1][3] == 3 and t[2][3] == 0 and t[2][1] == 1 and t[0][1] == INF
+
+
+def test_grid_is_off_by_default_and_adds_labelled_columns_when_on():
+    from cichlid_homology.parsimony import GRID, grid_name
+    c = {s: (2 if s in TEL else 1) for s in SCOPE}
+    assert not any(k.startswith("pg_") for k in ctx().score(c, SCOPE))
+    r = ParsimonyContext(st(), FakeClades(), 6, GRID).score(c, SCOPE)
+    assert all(f"pg_{grid_name(*x)}" in r and f"pgm_{grid_name(*x)}" in r for x in GRID)
+    assert r["pg_g1l1"] == "retained_ohnolog" and r["pg_g1l1f"] == "retained_ohnolog"
+
+
+def test_a_costlier_gain_and_a_free_teleost_duplication_resolve_the_zebrafish_tie():
+    from cichlid_homology.parsimony import GRID
+    c = {s: (2 if s in TEL else 1) for s in SCOPE}
+    c["danio_rerio"] = 1
+    r = ParsimonyContext(st(), FakeClades(), 6, GRID).score(c, SCOPE)
+    assert r["pg_g1l1"] == "ambiguous"                      # the tie of the unit costs
+    assert r["pg_g2l1"] == "retained_ohnolog" and r["pg_g1l1f"] == "retained_ohnolog"
+
+
+def test_percomorph_only_pair_stays_lost_until_gains_are_much_costlier_than_losses():
+    from cichlid_homology.parsimony import GRID
+    c = {s: 1 for s in SCOPE}
+    for s in ("trub", "gacu", "olat", "maylandia_zebra", "acal"):
+        c[s] = 2
+    r = ParsimonyContext(st(), FakeClades(), 6, GRID).score(c, SCOPE)
+    assert r["pg_g1l1"] == "lost_duplicate" and r["pg_g2l1"] == "lost_duplicate"
+    assert r["pg_g3l1f"] == "retained_ohnolog"              # a free teleost duplication plus a costly gain flips it

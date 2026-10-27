@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.1 (calibration grid for the parsimony costs)
+- `cichlid-homology pilot ... --parsimony-grid` also labels every gene by parsimony under twelve cost settings:
+  a gain costs 1, 2, 3, 4, 6 or 8 times a loss, each with and without a free teleost duplication (one extra copy
+  on the branch above the teleost ancestor costs nothing: the genome duplication doubles every gene). New columns
+  `pg_g<gain>l1[f]` (label) and `pgm_g<gain>l1[f]` (margin); `f` marks the free-duplication settings.
+  Off by default; the existing columns are unchanged.
+- Purpose: choose the costs that best reproduce independent pairs (OHNOLOGS v2) instead of fixing them by hand.
+- Tests: the free-duplication matrix, the grid columns, the zebrafish tie resolved by a costlier gain or a free
+  duplication, and a percomorph-only pair that stays `lost_duplicate` until a free duplication plus a costly gain.
+  Cross-checked against a separate implementation on 4,800 random cases (no mismatches).
+
 ## 0.9.0 (pilot: lost duplicate or retained ohnolog by parsimony, no share thresholds)
 - `parsimony.py`: for the gene's anchor clade (the same clade as the B1 profile), the copy numbers of the
   jawed-vertebrate species are explained by gains and losses on the pruned master species tree (no gene is born
