@@ -148,3 +148,13 @@ def test_the_pair_files_may_use_dots_or_underscores_and_a_wrong_folder_is_report
         raise AssertionError("a missing folder must raise")
     except FileNotFoundError:
         pass
+
+
+def test_a_many_copy_gene_with_a_pair_at_the_teleost_root_is_a_pair_but_a_thin_pair_is_not():
+    many = base(p_label="multi_copy", b_label_raw="multi_copy")
+    assert assign(many)["t_category"] == "Unclassified" and assign(many)["t_call"] == "many_copies"
+    a = assign(dict(many, d_call="pair"))
+    assert (a["t_category"], a["t_tier"]) == ("Both copies kept (best guess)", "possible") and "three or more copies" in a["t_basis"]
+    assert assign(dict(many, d_call="pair", t_pairs_relaxed_n=2))["t_tier"] == "probable"
+    assert assign(dict(many, d_call="thin_pair"))["t_category"] == "Unclassified"
+    assert assign(dict(many, d_call="pair", expanded_family="True"))["t_category"] == "Unclassified"   # expanded families stay out

@@ -8,6 +8,11 @@ species count (the same scope as the parsimony). In a placement tree (TreeFam, C
 used to find duplications, because genes on one branch cannot be ordered: the structure comes from the reference leaves,
 and each project gene is assigned to the lineage it was placed in. In an OrthoFinder tree (denovo) every leaf counts.
 
+A later duplication below the teleost root needs the same shared species as a pair (0.11.3): the first run with the
+overlap rule at the root still gave 5 to 9 nested "duplications", each spanning 18 to 34 species, on the path to the
+teleost root of genes that every method calls lost duplicates (single copy in every species); they are places where the gene
+tree disagrees with the species tree, not duplications.
+
 First run on Compara (0.11.0) showed that a duplication by reconciliation alone is not evidence of a pair: the gene tree
 often disagrees with the master species tree (which has a polytomy among the early teleosts), and 98% of genes that counts
 and parsimony agree are lost duplicates came out as "pairs", 93% of them with lineages that share no species. What
@@ -65,7 +70,7 @@ class _Tree:
         for sp, r in rank.items():
             if r == 1:
                 self.early |= 1 << rt.bit[sp]
-        self.M, self.smask, self.minrank = {}, {}, {}
+        self.M, self.smask, self.minrank, self._ov = {}, {}, {}, {}
         for n in postorder(rt.root):
             k = id(n)
             if not n.children:
@@ -91,6 +96,19 @@ class _Tree:
             return False
         inf = [c for c in n.children if self.M[id(c)] is not None]
         return len(inf) >= 2 and any(self.M[id(c)] == self.M[id(n)] for c in inf)
+
+    def overlap(self, n) -> float:
+        """Shared species / all species of the two largest informative children of n (0 when it has fewer than two)."""
+        k = id(n)
+        if k not in self._ov:
+            inf = [c for c in n.children if self.M[id(c)] is not None]
+            v = 0.0
+            if len(inf) >= 2:
+                big = sorted(inf, key=lambda c: -self.n_species(c))[:2]
+                union = _bits(self.smask[id(big[0])] | self.smask[id(big[1])])
+                v = _bits(self.smask[id(big[0])] & self.smask[id(big[1])]) / union if union else 0.0
+            self._ov[k] = v
+        return self._ov[k]
 
     def level(self, n):
         r = self.minrank[id(n)]
@@ -151,7 +169,7 @@ def treedate_profile(rt, g, anchor, ctx, mode: str, prefixes=None, pair_overlap:
     out["d_focal_lineages"] = sum(1 for c in tr.children if any(x.sp == g.sp for x in rt.leaves_in(c)))
     later, v, deepest = [], g.parent, None
     while v is not None and v is not tr:
-        if T.dup(v):
+        if T.dup(v) and T.overlap(v) >= pair_overlap:           # a duplication needs shared species, as a pair does
             later.append((T.level(v), T.n_species(v)))
             if T.n_species(v) >= 2:
                 deepest = v

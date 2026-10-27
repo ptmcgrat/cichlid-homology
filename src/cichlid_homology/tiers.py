@@ -15,7 +15,9 @@ evidence: among genes that are not pairs, 45 to 58% of those with two copies are
 gene tree shows a pair, `d_call` = pair: two lineages at the teleost level sharing half their species, which on the genes
 where the counts disagree was in a published pair 2.5 times as often as for genes with no evidence);
 `disputed` (the calls conflict and nothing settles it, or the copies are tandem); `unclassified` (not scored, expanded
-family, or many copies). No share cutoffs are added here.
+family, or many copies; a many-copy gene whose gene tree shows a pair at the teleost root is a pair, `possible`, or
+`probable` with a published pair: on Compara such genes were in a published pair 39% of the time against 9% for many-copy
+genes with no shared species). No share cutoffs are added here.
 
 The simplified category (`t_category`) groups these: Lost duplicate; Both copies kept (best guess) (R2, R3, probable and
 possible, with the confidence in `t_tier`); Later duplicate, in cichlids (R5); Later duplicate, before cichlids (a
@@ -87,9 +89,14 @@ def _assign(row: dict) -> dict:
         return {**out, "t_row": "unclassified", "t_call": "no_anchor", "t_tier": "unclassified", "t_basis": "no outgroup anchor in the tree"}
     if str(row.get("expanded_family")) == "True":
         return {**out, "t_row": "unclassified", "t_call": "expanded_family", "t_tier": "unclassified", "t_basis": "family with many focal genes"}
-    if thr == "multi_copy" or p == "multi_copy":
-        return {**out, "t_row": "unclassified", "t_call": "many_copies", "t_tier": "unclassified", "t_basis": "three or more copies in many teleosts"}
     pub = _n(row.get("t_pairs_relaxed_n"))
+    if thr == "multi_copy" or p == "multi_copy":
+        if str(row.get("d_call")) == "pair":        # a pair at the teleost root in a family with many copies
+            tier = "probable" if pub else "possible"
+            return {**out, "t_row": "R2/3/4", "t_call": "retained_pair", "t_tier": tier,
+                    "t_basis": "three or more copies in many teleosts, but the gene tree shows a pair at the teleost root"
+                               + (f"; in a published pair in {pub} of 4 species" if pub else "")}
+        return {**out, "t_row": "unclassified", "t_call": "many_copies", "t_tier": "unclassified", "t_basis": "three or more copies in many teleosts"}
     cl = _later_levels(row)
     pair_t, pair_p = thr in PAIR_THR, p == "retained_ohnolog"
     zloss = "danio_rerio" in str(row.get("p_loss_species") or "").split(";")

@@ -126,3 +126,13 @@ def test_the_overlap_cutoff_is_a_parameter():
     ctx = ParsimonyContext(st(), FakeClades(), 6)
     strict = treedate_profile(rt, g, anchor_for(rt, g, FakeClades(), None), ctx, "denovo", None, 0.9)
     assert strict["d_root"] == "thin" and strict["d_call"] == "thin_pair"
+
+
+def test_a_node_where_the_gene_tree_disagrees_with_the_species_tree_is_not_a_later_duplication():
+    """(Trub,Mzeb) against (Gacu,Acal): reconciliation says duplication, but no species has both: nothing was duplicated."""
+    scrambled = "(((Trub_1,Mzeb_1),(Gacu_1,Acal_1)),Olat_1)"
+    r = run(f"({OUT},(Aang_1,(Drer_1,{scrambled})));", "Mzeb_1")
+    assert r["d_later_levels"] == "" and r["d_call"] == "lost_duplicate"
+    real = "(((Trub_1,Mzeb_1),(Trub_2,Mzeb_2)),Olat_1)"                 # the same shape with species in both halves: a duplication
+    r2 = run(f"({OUT},(Aang_1,(Drer_1,{real})));", "Mzeb_1")
+    assert r2["d_call"] == "later_duplicate_before_cichlids" and r2["d_first_later_level"] == "percomorph"

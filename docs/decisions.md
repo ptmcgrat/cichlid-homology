@@ -108,3 +108,15 @@ large clades (expanded families), and whether to tell the coordinator that the s
   own genes (duplications among project genes, carriers for B2) and all ten cichlids.
 - Check on the 0.11.0 run: `t_pairs_*` were empty, so the published pairs were not loaded (the run was probably made without
   `--ohnologs`, or the folder did not hold the files); the categories of that run lack the probable tier.
+
+
+## 0.11.3: the tree call after the clade fix
+- Compara, 0.11.2 run (benchmark: 2,637 published-pair positives, 8,192 negatives): tree pair 56.5% / 0.3% (J 56.2);
+  thresholds 84.0% / 0.8% (J 83.2); thresholds or tree pair 89.3% / 0.8% (J 88.5); either count call or tree pair 91.4% / 5.9%.
+  The 140 positives the thresholds miss and the tree finds are in families the thresholds call many-copy (138 of 140).
+- On genes where the counts disagree, a tree pair was in a published pair 47.3% of the time against 18.7% for genes with no
+  evidence (likelihood ratio 2.5; copies on different sequences 1.4).
+- Overlap histogram: a large mass at 0 (the gene tree disagrees with the species tree, or reciprocal losses), a second
+  mode at 0.8 to 1.0, a valley at 0.3 to 0.5; 0.5 is kept.
+- Many-copy families: a tree pair is evidence of a pair (39.0% in a published pair, against 8.8% without shared species and
+  43.6% for ordinary pairs); in expanded families it is weak (14.9% against 6.0%) and they stay unclassified.

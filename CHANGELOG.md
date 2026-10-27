@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.3 (later duplications need shared species; many-copy pairs)
+- Run of 0.11.2 on Compara: the teleost clade fix dated 90% of genes (65% before) and the pair call works: 56.5% of
+  published-pair positives are tree pairs against 0.3% of negatives, none of the 9,541 core lost duplicates is a pair, and
+  "thresholds or tree pair" recalls 89.3% at 0.8% false positives (thresholds alone 84.0%).
+- Fault: 15,304 genes, 8,768 of the core lost duplicates among them, were called `later_duplicate_before_cichlids`. On the path to
+  the teleost root of a gene with one copy in every species there were 5 to 9 nested nodes where reconciliation said duplication
+  with 18 to 34 species and none in common: the gene tree disagrees with the species tree. A later duplication now needs the same
+  shared species as a pair (the two largest children share at least `--pair-overlap`, 0.5).
+- Tiers: a gene in a family with many copies (thresholds or parsimony say three or more copies in many teleosts) whose gene tree
+  shows a pair at the teleost root is a pair: `possible`, or `probable` with a published pair. On Compara 510 genes were in a
+  published pair 39.0% of the time against 8.8% for many-copy genes with no shared species. Expanded families stay unclassified
+  (14.9% against 6.0%). Preview on the 0.11.2 table: Both copies kept 6,412 -> 6,922 (core 5,413, probable 555, possible 954);
+  Unclassified 8,033 -> 7,523. 142 offline tests.
+
 ## 0.11.2 (published-pair files: both name styles, and a loud failure)
 - The OHNOLOGS loader missed the files on mzebra (`drerio.Pairs.Strict.3R.txt`) because it expected underscores
   (`drerio_Pairs_Strict_3R.txt`): nothing was loaded and nothing was said, so the 0.11.0 run had no published-pair evidence.
