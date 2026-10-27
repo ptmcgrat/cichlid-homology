@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .clade_counts import GROUPS
 from .consensus import label_agreement
+from .summary_p import parsimony_agreement, parsimony_summary
 from .symbols import matched
 
 REFS = ("human", "zebrafish")
@@ -305,6 +306,8 @@ def build(all_rows, out_dir: Path) -> dict:
            "goal_B_agreement": goal_b_agreement(by, genes),
            "origin": {m: origin_summary(rows) for m, rows in all_rows.items()},
            "candidates": cands,
+           "parsimony": {m: parsimony_summary(rows) for m, rows in all_rows.items()},
+           "parsimony_agreement": parsimony_agreement(by, genes),
            "candidates_in_both_methods": len(ids[A] & ids[B]),
            "candidates_in_both_methods_with_no_risk_flag_in_either": len(clean[A] & clean[B])}
     out["category_splits_written"] = write_splits(by, genes, out_dir)

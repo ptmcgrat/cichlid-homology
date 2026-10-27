@@ -105,6 +105,35 @@ def write_report(summary: dict, path: Path) -> None:
     ga = A["goal_B_agreement"]
     L += [f"B1 label agreement for genes OneToOne or OneToTwo in both methods: {ga['genes_OneToOne_or_OneToTwo_in_both_methods']} genes, "
           f"{ga['labels']}, agree {ga['agree_pct_when_both_labelled']}% when both gave a label.", ""]
+    L += ["## Lost duplicate or retained ohnolog by parsimony (0.9.0 pilot)", "",
+          "Copy numbers of the jawed-vertebrate species in the anchor clade are explained by gains and losses on "
+          "the species tree; the teleost ancestor having 1, 2 or 3 copies is compared by the fewest events. No share "
+          "thresholds. `ambiguous` = a tie, or the call changes when a loss costs 2 gains or the reverse.", ""]
+    for m in ("TreeFam", "Compara"):
+        p = A["parsimony"][m]
+        if not p.get("scored"):
+            L += [f"### {m}: nothing scored ({p.get('status')})", ""]
+            continue
+        lab = ", ".join("%s %d (%s%%)" % (k, v["n"], v["pct"]) for k, v in p["labels"].items())
+        L += [f"### {m}: {p['scored']} of {p['genes']} genes scored ({p['status']})", "",
+              f"Labels: {lab}. Margin (events separating the best and second-best history), 0 to 6+: "
+              f"{p['margin_0_1_2_3_4_5_6plus']}. Robust to the relative cost of a loss: {p['robust_to_cost_changes_pct']}%. "
+              f"Zero counts read as losses or as missing data give the same label for "
+              f"{p['zero_as_loss_vs_missing_agree_pct']}% of {p['zero_modes_compared']} genes.", "",
+              "Against the threshold-based B1 label (rows: parsimony label):", "",
+              _table(["parsimony label", "B1 labels"], [[k, v] for k, v in p["vs_threshold_B1_labels"].items()]), "",
+              "By human group: " + str(p["by_human_group"]), "",
+              "Check 1, zebrafish a/b names (share of best zebrafish gene names ending in a or b): "
+              + str(p["check_zebrafish_ab_names_pct"]), "",
+              "Check 2, position of the nearest other copy: " + str(p["check_copy_positions"]), "",
+              "Later gains below the teleost ancestor (the third B1 outcome): "
+              + str(p["later_duplicates_after_the_teleost_ancestor"]), "",
+              f"Gain events by ladder level (all scored genes): {p['gain_events_by_level_all_scored_genes']}. "
+              f"Of {p['retained_ohnologs_total']} retained ohnologs, {p['retained_ohnologs_with_a_species_level_loss']}% "
+              f"have a species-level loss; most often: {p['species_most_often_lost_in_retained_ohnologs']}.", ""]
+    pa = A["parsimony_agreement"]
+    L += [f"TreeFam and Compara parsimony labels (ambiguous counted as no call): {pa['labels']}; agree "
+          f"{pa['agree_pct_when_both_called']}% when both called. Pairs: {pa['pairs_TreeFam_Compara']}", ""]
     L += ["## Where the extra copies sit", "",
           "For genes with two or more focal-species copies in the reference clade: the nearest other copy is "
           "adjacent (no gene between), near (at most the set number of genes between), distant on the same "

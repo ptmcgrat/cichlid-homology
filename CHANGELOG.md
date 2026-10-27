@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0 (pilot: lost duplicate or retained ohnolog by parsimony, no share thresholds)
+- `parsimony.py`: for the gene's anchor clade (the same clade as the B1 profile), the copy numbers of the
+  jawed-vertebrate species are explained by gains and losses on the pruned master species tree (no gene is born
+  from nothing; the deepest ancestor has one gene). The teleost ancestor having 1, 2 or 3 copies is compared by
+  the fewest events: `lost_duplicate`, `retained_ohnolog`, `multi_copy`. The margin between the best and
+  second-best history is the confidence; a tie, or a call that changes when a loss costs 2 gains or the reverse,
+  is `ambiguous`. Species with no gene in the clade are scored both as losses and as missing data
+  (`p_label`, `p_label_missing`, `p_zero_modes_agree`).
+- The events of the best history are reported: gains by ladder level (a later duplicate is a gain below the teleost
+  ancestor), losses by species (`p_loss_species`), so a zebrafish loss of a retained ohnolog is explicit.
+- Scope: species that are jawed vertebrates in the clade table; the lamprey and invertebrates are left out.
+- `summary_p.py` and a report section: label counts, margins, robustness, comparison with the threshold-based B1
+  labels, two checks that use nothing from the labels (zebrafish a/b names, positions of the copies), later gains,
+  most-lost species, and agreement between TreeFam and Compara.
+- Not yet: the scan of every internal node of every tree. This pilot scores the same clades as B1 and tests the
+  scoring first.
+- 105 offline tests; about 10 ms per unique 60-species clade.
+
 ## 0.8.0
 - Whole-genome mode: `cichlid-homology pilot --all` calls every gene of the species that has a finished family in a
   method (the 0.7.0 pilot called a biased sample); `--species Mzeb,Acal` runs several species (a folder each).

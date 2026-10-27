@@ -44,3 +44,9 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - Category groups and `--all` as above. Tandem threshold: at most 10 genes between two copies (`--tandem-gap`).
 - Open: what counts as a real cichlid-specific duplication (the 0.7.0 pilot found 4 to 12% of extra-copy genes had
   extra copies only in cichlids); how to use the risk flags; which copy is the older one needs OrthoFinder.
+
+
+## 0.9.0: parsimony instead of share thresholds for lost duplicate / retained ohnolog
+- Relative cost of a gain and a loss: 1:1 by default; a call must hold at 1:2 and 2:1 or it is `ambiguous`.
+- Zero counts: scored both as losses and as missing data; the report says how often they differ. OPEN: which to use.
+- Next, if the scoring works: scan every internal node of every tree for clades with these patterns.

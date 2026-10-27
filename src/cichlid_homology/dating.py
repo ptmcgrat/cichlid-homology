@@ -21,6 +21,8 @@ class Params:
     min_other: int = 3              # fewest non-cichlid teleost species needed to label
     expanded_min: int = 10          # M. zebra genes in a family at or above which it counts as expanded
     tandem_max_gap: int = 10        # genes between two copies at or below which they count as tandem
+    parsimony: bool = True          # score the clade copy numbers by parsimony on the species tree
+    parsimony_kcap: int = 6         # copy numbers above this are treated as this many
 
 
 def level_of_species(clades, sp):

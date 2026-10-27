@@ -30,6 +30,10 @@ the `cichlid-data` command line. No hand-built data paths, no rclone, no downloa
 See `docs/pilot_plan.md`. The pilot writes `pilot_report.md` (overall numbers and agreement between the methods) and
 the tables behind it to `~/share/pilot_<version>_<timestamp>`.
 
+## Parsimony pilot (0.9.0)
+
+The report has a section on lost duplicates and retained ohnologs scored by parsimony on the species tree.
+
 ## Status
 
 0.2.x: pilot code (rooting, relationships, dating, method comparison), tested offline, not yet run on

@@ -133,6 +133,17 @@ def clade_profile(rt: RTree, g: Node, clades, t: float, prm: Params | None = Non
     return row
 
 
+def anchor_for(rt: RTree, g: Node, clades, human_clade: Node | None):
+    """(name, clade) of the anchor clade: the human clade, else the smallest clade with another non-teleost
+    jawed vertebrate, else (None, None)."""
+    lv = lambda s: level_of_species(clades, s)
+    if human_clade is not None:
+        return "human", human_clade
+    other = {s for s in rt.species if lv(s) == "gnathostome"}
+    a = smallest_clade(rt, g, other)
+    return ("other_gnathostome", a) if a is not None else (None, None)
+
+
 def clade_profile_v2(rt: RTree, g: Node, clades, prm: Params | None, human_clade: Node | None) -> dict:
     """Goal B on the clade of the best human gene (the A1 clade), with no orthology test. If the tree has
     no human gene, the smallest clade with any other non-teleost jawed vertebrate is used instead."""

@@ -113,3 +113,17 @@ def test_sample_mode_takes_the_whole_family_of_a_sampled_gene(tmp_path):
     summary, out = run(tmp_path, all_genes=False)
     assert summary["run"]["mode"] == "sample"
     assert set(rows(out / "pilot_genes.Compara.tsv")) == {"Mzeb_1", "Mzeb_2", "Mzeb_3", "Mzeb_4", "Mzeb_5"}
+
+
+def test_parsimony_columns_labels_and_summary_in_the_whole_pilot(tmp_path):
+    summary, out = run(tmp_path, all_genes=True)
+    t = rows(out / "pilot_genes.TreeFam.tsv")
+    assert t["Mzeb_1"]["p_label"] == "lost_duplicate" and t["Mzeb_1"]["p_robust"] == "True"
+    assert t["Mzeb_2"]["p_label"] == "retained_ohnolog" and t["Mzeb_2"]["p_gain_levels"] == "teleost_ancestor:1"
+    assert t["Mzeb_4"]["p_label"] == "lost_duplicate" and t["Mzeb_4"]["p_gain_levels"] == "cichlid:1"   # a later duplicate
+    P = summary["A"]["parsimony"]["TreeFam"]
+    assert P["scored"] == 5 and P["labels"]["retained_ohnolog"]["n"] == 2
+    assert P["later_duplicates_after_the_teleost_ancestor"]["lost_duplicate"]["with_a_later_gain"] == 2
+    assert P["check_copy_positions"]["retained_ohnolog"]["different_sequence_pct"] == 100.0
+    assert summary["A"]["parsimony_agreement"]["agree_pct_when_both_called"] == 100.0
+    assert "## Lost duplicate or retained ohnolog by parsimony" in (out / "pilot_report.md").read_text()

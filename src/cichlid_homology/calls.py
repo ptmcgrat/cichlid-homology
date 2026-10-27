@@ -4,13 +4,14 @@ from __future__ import annotations
 from .dating import Params, birth_of_copy, date_mask, date_node, level_of_species
 from .orthology import RTree, relationship, teleost_pattern
 from .clade_counts import clade_counts, group
-from .profile import clade_profile_v2
+from .parsimony import parsimony_profile
+from .profile import anchor_for, clade_profile_v2
 from .tree import Node
 
 REFS = {"human": "homo_sapiens", "zebrafish": "danio_rerio"}
 
 
-def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str, prefixes) -> dict:
+def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str, prefixes, pctx=None) -> dict:
     row = {"parent_children": len(g.parent.children) if g.parent is not None else 0,
            "species_in_tree": len(rt.species)}
     human_node = None
@@ -53,6 +54,8 @@ def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str,
                 row[f"{key}_dup_level_overlap"] = b["level_overlap"] or ""
                 row[f"{key}_dup_ref_levels_sides"] = f"{b['ref_levels_a']}/{b['ref_levels_b']}"
     row.update(clade_profile_v2(rt, g, clades, prm, human_node))
+    if pctx is not None and prm.parsimony:
+        row.update(parsimony_profile(rt, g, anchor_for(rt, g, clades, human_node), pctx))
     tp = teleost_pattern(rt, g, own, prm.overlap_t, lambda s: level_of_species(clades, s))
     row.update({f"teleost_{k}": v for k, v in tp.items()})
     return row

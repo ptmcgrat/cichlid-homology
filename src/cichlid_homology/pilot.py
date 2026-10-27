@@ -25,6 +25,7 @@ from .orthology import RTree, relationship
 from .read import load_family, read_tsv
 from .rooting import root_tree
 from .origin import attach_origin
+from .parsimony import ParsimonyContext
 from .owngenes import gene_order, own_genes
 from .quality import attach_quality
 from .species import SHADOW_RULE, drop_shadowed, load_leaf_species
@@ -53,6 +54,10 @@ B_COLS = (["b_anchor", "b_label", "b_label_raw", "expanded_family", "b_pattern",
            "b_cichlid_with2p", "b_cichlid_share2p", "b_cichlid_share3p", "b_cichlid_extra_species"]
           + [f"b_{lv}_{k}" for lv in ("teleost", "percomorph", "ovalentaria", "cichlid")
              for k in ("n", "1", "2", "3p")])
+P_COLS = ["p_status", "p_anchor", "p_label", "p_label_unit", "p_robust", "p_margin", "p_cost1", "p_cost2", "p_cost3",
+          "p_label_missing", "p_margin_missing", "p_zero_modes_agree", "p_scope_species", "p_teleost_species",
+          "p_outgroup_species", "p_outgroup_with_gene", "p_outgroup_single", "p_gains_n", "p_losses_n",
+          "p_gains_below_T", "p_losses_below_T", "p_gain_levels", "p_loss_species", "p_loss_clades"]
 SYMBOL_COLS = ["own_symbol", "human_symbol_match", "zebrafish_symbol_match"]
 A_FIELDS = ["cat", "group", "ref_n", "focal_n", "clade_leaves", "best", "best_dist", "tie", "best_symbol", "best_id",
             "best_name_status", "best_name_reliable", "name_confidence", "ref_ids", "ref_symbols",
@@ -62,7 +67,7 @@ ORIG_COLS = ["orig_basis", "orig_copies_n", "orig_class", "orig_nearest_copy", "
              "orig_copies_same_seqid", "orig_copy_ids"]
 QUAL_COLS = ["risk_flags", "n_risk_flags", "gt_partial", "gt_low_quality", "gt_internal_stops",
              "gt_protein_length", "gt_description"]
-COLUMNS = BASE_COLS + A_COLS + B_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+COLUMNS = BASE_COLS + A_COLS + B_COLS + P_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
 SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 
@@ -83,7 +88,7 @@ def prepare(fam, ls, shadowed, st, prm):
     return rooting, [RTree(r) for r in rooting.roots], dropped, unknown
 
 
-def process_family(fam, ls, shadowed, st, clades, prm, own_prefix, prefixes, alt_t, meta):
+def process_family(fam, ls, shadowed, st, clades, prm, own_prefix, prefixes, alt_t, meta, pctx=None):
     t0 = time.time()
     prep = prepare(fam, ls, shadowed, st, prm)
     if prep is None:
@@ -95,7 +100,7 @@ def process_family(fam, ls, shadowed, st, clades, prm, own_prefix, prefixes, alt
     for name in own_names:
         g = by_name[0][name]
         own = g.sp
-        row = call_gene(rts[0], g, own, prm, clades, fam.tree_mode, prefixes)
+        row = call_gene(rts[0], g, own, prm, clades, fam.tree_mode, prefixes, pctx)
         for key in REFS:
             rels = {row[f"{key}_relationship"]}
             for rt, bn in zip(rts[1:], by_name[1:]):
@@ -163,6 +168,7 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
         genes, order, own = {}, {}, {}
         summary["own_genes_error"] = traceback.format_exc()[-800:]
     all_rows = {}
+    pctx = ParsimonyContext(st, clades, prm.parsimony_kcap) if prm.parsimony else None
     for part in PARTS:
         t0 = time.time()
         if all_genes:
@@ -205,7 +211,7 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
                 continue
             try:
                 rows, info = process_family(fam, ls, shadowed, st, clades, prm, species,
-                                            prefixes, alt_t, None)
+                                            prefixes, alt_t, None, pctx)
             except Exception:
                 errors.append({"family": f, "error": traceback.format_exc()[-1500:]})
                 continue
