@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.0 (pilot of a simpler A1 and A2; not agreed with the coordinator)
+- `clade_counts.py`: for each focal-species gene and each reference species (human, zebrafish), the smallest clade
+  holding the gene and a reference gene; counts of reference genes and of focal-species genes in it (other cichlids
+  are not counted); category OneToOne, OneToTwo, OneToMany, ManyToOne, ManyToMany, or None; the best reference gene
+  is the shortest path (ties flagged). No duplication/speciation rule, so the `paralog` category and the overlap
+  threshold are not used for A1 and A2.
+- Goal B (`profile.clade_profile_v2`) now uses that human clade (or, with no human gene, the smallest clade with
+  another non-teleost jawed vertebrate), with no orthology test. The teleost distribution is summarised for the
+  human OneToOne and OneToTwo genes.
+- Names, official IDs and the NCBI-symbol check apply to the new best genes (`names.attach_names_a`,
+  `symbols.attach_symbol_check_a`).
+- `summary_a.py` and `report.py`: overall numbers per method, agreement between TreeFam and Compara (category, the
+  reference-gene count, the focal-gene count, the best gene by official ID, adjudication by the gene's own symbol),
+  and goal B. The pilot writes `pilot_report.md` and prints it.
+- New files: `pilot_category_splits.tsv`, `pilot_best_gene_differences.<ref>.tsv`.
+- The old columns (`human_relationship`, paralog levels, dup classes, overlap) are still computed and written, under
+  their old names, and are not used by the new summary. They go once the change is agreed.
+- 82 offline tests.
+
 ## 0.6.0
 - Goal B labels revised after the 0.5.0 run (`profile.py`): non-cichlid teleosts are one group (TreeFam has only 2 to 4
   species per level); a species carries an extra copy at 2 or more copies (cichlid expansions with 3+ now count);

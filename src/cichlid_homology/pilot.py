@@ -17,12 +17,14 @@ from .calls import REFS, call_gene
 from .consensus import label_agreement
 from .dating import Params
 from .master import load_species_tree
-from .names import attach_names, identity_agreement, load_names
+from .names import attach_names, attach_names_a, identity_agreement, load_names
+from . import summary_a
+from .report import write_report
 from .orthology import RTree, relationship
 from .read import load_family, read_tsv
 from .rooting import root_tree
 from .species import SHADOW_RULE, drop_shadowed, load_leaf_species
-from .symbols import attach_symbol_check, matched, own_symbols
+from .symbols import attach_symbol_check, attach_symbol_check_a, matched, own_symbols
 from .tree import leaves, parse_newick, prune
 
 ROOT_RULE = ("reconcile with the master species tree (fewest duplications, then fewest losses); "
@@ -48,7 +50,11 @@ B_COLS = (["b_anchor", "b_label", "b_label_raw", "expanded_family", "b_pattern",
           + [f"b_{lv}_{k}" for lv in ("teleost", "percomorph", "ovalentaria", "cichlid")
              for k in ("n", "1", "2", "3p")])
 SYMBOL_COLS = ["own_symbol", "human_symbol_match", "zebrafish_symbol_match"]
-COLUMNS = BASE_COLS + B_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+A_FIELDS = ["cat", "ref_n", "focal_n", "clade_leaves", "best", "best_dist", "tie", "best_symbol", "best_id",
+            "best_name_status", "best_name_reliable", "name_confidence", "ref_ids", "ref_symbols",
+            "ref_unreliable", "symbol_match", "symbol_match_any"]
+A_COLS = [f"a_{k}_{f}" for k in REFS for f in A_FIELDS]
+COLUMNS = BASE_COLS + A_COLS + B_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
 SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 
@@ -183,8 +189,11 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
             per_family.append({"family": f, **info})
         names_error = None
         try:
-            attach_names(rows_part, load_names(layout, part))
+            table = load_names(layout, part)
+            attach_names(rows_part, table)
+            attach_names_a(rows_part, table)
             attach_symbol_check(rows_part, own)
+            attach_symbol_check_a(rows_part, own)
         except Exception:
             names_error = traceback.format_exc()[-1200:]
         all_rows[part] = rows_part
@@ -196,6 +205,8 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
         summary[part]["reference_names"] = names_error or _names_summary(rows_part)
         summary[part]["symbol_check"] = names_error or _symbol_summary(rows_part)
     summary["agreement"] = _agreement(all_rows, sampled, out_dir)
+    summary["A"] = summary_a.build(all_rows, out_dir)
+    write_report(summary, out_dir / "pilot_report.md")
     (out_dir / "pilot_summary.json").write_text(json.dumps(summary, indent=1, default=str))
     return summary
 
@@ -252,7 +263,7 @@ def _summarize(rows, fams, errors, sens, shadowed, seconds):
     return out
 
 
-NO_B = (None, "", "no_orthologous_anchor", "insufficient_species", "expanded_family")
+NO_B = (None, "", "no_anchor", "no_orthologous_anchor", "insufficient_species", "expanded_family")
 
 
 def _goal_b(rows):

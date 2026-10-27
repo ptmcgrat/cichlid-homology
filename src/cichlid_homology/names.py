@@ -92,3 +92,33 @@ def identity_agreement(ids_a: set, ids_b: set) -> str:
     if not ids_a or not ids_b:
         return "not_comparable"
     return "same_gene" if ids_a & ids_b else "different_gene"
+
+
+def attach_names_a(rows: list, table, refs=("human", "zebrafish")) -> None:
+    """The same for the 0.7.0 counts: name, official ID and confidence of the best reference gene
+    (`a_<ref>_best`), and the IDs and symbols of every reference gene in its clade."""
+    cache: dict = {}
+
+    def info(p):
+        if p not in cache:
+            cache[p] = lookup(table, p)
+        return cache[p]
+
+    for r in rows:
+        for key in refs:
+            c = r.get(f"a_{key}_best")
+            if c:
+                i = info(c)
+                r[f"a_{key}_best_symbol"] = i["symbol"]
+                r[f"a_{key}_best_id"] = i["official_id"]
+                r[f"a_{key}_best_name_status"] = i["status"]
+                r[f"a_{key}_best_name_reliable"] = i["reliable"]
+                r[f"a_{key}_name_confidence"] = "ok" if i["reliable"] and i["official_id"] else "low"
+            infos = [info(p) for p in (r.get(f"_a_{key}_ref_leaves") or [])]
+            ids = sorted({i["official_id"] for i in infos if i["reliable"] and i["official_id"]})
+            syms = sorted({i["symbol"] for i in infos if i["symbol"]})
+            r[f"_a_{key}_ids"] = set(ids)
+            r[f"_a_{key}_symbols"] = set(syms)
+            r[f"a_{key}_ref_ids"] = _capped(ids)
+            r[f"a_{key}_ref_symbols"] = _capped(syms)
+            r[f"a_{key}_ref_unreliable"] = sum(1 for i in infos if not i["reliable"])

@@ -70,8 +70,9 @@ def test_identity_differences_are_adjudicated_by_the_genes_own_symbol(tmp_path):
 
 def test_default_output_goes_to_share(tmp_path):
     p = default_out("pilot", base=str(tmp_path / "share"), now="20261023-120000")
-    assert p.parent == tmp_path / "share" and p.name == "pilot_0.6.0_20261023-120000"
-    assert default_out("survey", ".json", now="x").name == "survey_0.6.0_x.json"
+    from cichlid_homology import __version__
+    assert p.parent == tmp_path / "share" and p.name == f"pilot_{__version__}_20261023-120000"
+    assert default_out("survey", ".json", now="x").name == f"survey_{__version__}_x.json"
     assert str(default_out("pilot")).startswith(str(__import__("pathlib").Path("~/share").expanduser()))
 
 

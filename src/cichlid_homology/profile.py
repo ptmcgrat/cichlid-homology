@@ -25,6 +25,7 @@ B2 (counts only; OrthoFinder is the authority for where carriers meet):
 """
 from __future__ import annotations
 
+from .clade_counts import smallest_clade
 from .dating import Params, level_of_species
 from .orthology import TELEOST_LEVELS, RTree
 from .tree import Node
@@ -123,6 +124,29 @@ def clade_profile(rt: RTree, g: Node, clades, t: float, prm: Params | None = Non
     row = {"b_anchor": name or "none"}
     if a is None:
         row["b_label"] = "no_orthologous_anchor"
+        return row
+    counts = copy_counts(rt, a, lv)
+    row.update(summarize(counts, prm))
+    row["b_clade_leaves"] = a.hi - a.lo
+    row["b_teleost_species_in_tree"] = sum(1 for s in rt.species if lv(s) in TELEOST_LEVELS)
+    row["b_label"] = label(row, prm)
+    return row
+
+
+def clade_profile_v2(rt: RTree, g: Node, clades, prm: Params | None, human_clade: Node | None) -> dict:
+    """Goal B on the clade of the best human gene (the A1 clade), with no orthology test. If the tree has
+    no human gene, the smallest clade with any other non-teleost jawed vertebrate is used instead."""
+    prm = prm or Params()
+    lv = lambda s: level_of_species(clades, s)
+    if human_clade is not None:
+        name, a = "human", human_clade
+    else:
+        other = {s for s in rt.species if lv(s) == "gnathostome"}
+        a = smallest_clade(rt, g, other)
+        name = "other_gnathostome" if a is not None else None
+    row = {"b_anchor": name or "none"}
+    if a is None:
+        row["b_label"] = "no_anchor"
         return row
     counts = copy_counts(rt, a, lv)
     row.update(summarize(counts, prm))

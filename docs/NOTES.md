@@ -24,6 +24,11 @@
 - No code is written without the owner's go-ahead.
 - Questions and results are reported to the owner; the coordinator is written to only when blocked.
 
+## 0.7.0 pilot
+- A1 and A2 as counts (OneToOne, OneToTwo, OneToMany, ManyToOne, ManyToMany) on the smallest clade holding the gene
+  and a reference gene; counts for the focal species only; best reference gene by path length. The owner has not
+  committed to this change, so the coordinator has not been told.
+
 ## Dispatch 7 (2026-10-22, coordinator v0.14.1) in force
 - Aims A1, A2, B1, B2 as in the sheet's section 1; equal standing for the three methods on A1 and A2; B1 from
   Compara and OrthoFinder with TreeFam only as a flagged fallback; B2 with OrthoFinder as the authority.

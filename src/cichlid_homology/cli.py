@@ -119,8 +119,9 @@ def _pilot(args) -> int:
                  kept_frac=args.kept, lost_frac=args.lost)
     s = run_pilot(layout, Catalog.load(layout), Clades.load(), args.species, args.n, prm,
                   [float(x) for x in args.alt_overlap.split(",") if x], out, n_denovo=args.n_denovo)
-    print(json.dumps(s, indent=1, default=str))
+    print((out / "pilot_report.md").read_text())
     print(f"\nwritten to {out}")
+    print(f"report: {out / 'pilot_report.md'}   full summary: {out / 'pilot_summary.json'}")
     return 0
 
 

@@ -65,3 +65,18 @@ def attach_symbol_check(rows: list, own: dict, refs=("human", "zebrafish")) -> N
 
 def matched(grade: str) -> bool:
     return grade in ("exact", "stem")
+
+
+def attach_symbol_check_a(rows: list, own: dict, refs=("human", "zebrafish")) -> None:
+    """For the 0.7.0 counts. `a_<ref>_symbol_match` compares the gene's own symbol with the best reference
+    gene only; `a_<ref>_symbol_match_any` with every reference gene in the clade."""
+    for r in rows:
+        sym = own.get(r["gene_id"], "")
+        r.setdefault("own_symbol", sym)
+        for key in refs:
+            best = r.get(f"a_{key}_best_symbol", "")
+            r[f"a_{key}_symbol_match"] = match_grade(sym, {best} if best else set())
+            anyset = set(r.get(f"_a_{key}_symbols", set()))
+            if best:
+                anyset.add(best)
+            r[f"a_{key}_symbol_match_any"] = match_grade(sym, anyset)

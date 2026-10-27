@@ -32,3 +32,9 @@ provisional: set them from the histograms in `pilot_summary.json` (`goal_B`).
 - Both methods give the same goal B label for 89% of the 1,270 genes labelled in both; only 23 conflicts do not
   involve `mixed`.
 - Open: how many genes the NCBI-symbol check can test (many cichlid genes have only LOC names).
+
+
+## 0.7.0 pilot: A1 and A2 as counts (owner's proposal; not yet agreed with the coordinator)
+Replaces the overlap-based relationship and the `paralog` category. The pilot's report shows whether the two methods
+agree on the counts and on the best reference gene. To decide after reading it: keep the counts, how to treat very
+large clades (expanded families), and whether to tell the coordinator that the sheet's `paralog` category is replaced.
