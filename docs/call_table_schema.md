@@ -36,3 +36,11 @@ To add before the full run: `<ref>_closest_symbol` (when the identifier mappings
 
 ## C. `<prefix>.review.tsv` : the rows of B with `review = True`.
 ## D. `<prefix>.missing_annotation.tsv` : families conserved in other cichlids/teleosts with no gene of the focal species (candidates only): `family, method, n_species_with_gene, n_cichlids_with_gene, species_with_gene`.
+
+
+## Draft additions in 0.10.0 (B1 tiers)
+`t_row` (R1, R2, R3, R2/3/4, R5, other, outside), `t_call` (lost_duplicate, retained_pair, cichlid_specific_duplicate,
+unresolved, no_anchor, expanded_family, many_copies), `t_tier` (core, probable, possible, disputed, outside), `t_basis`
+(a short reason), `t_positions` (dispersed, tandem or empty), and, when published pairs are given, `t_pairs_relaxed_n`,
+`t_pairs_strict_n`, `t_pairs_species`. Parsimony: `p_label` (gain 2, loss 1), `p_label_unit` (equal costs), `p_robust`,
+`p_margin`, `p_cost1` to `p_cost3`, and the event columns.

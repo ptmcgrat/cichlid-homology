@@ -73,10 +73,11 @@ def run(tmp, **kw):
     cat = SimpleNamespace(species=lambda release=None: [SimpleNamespace(prefix=p) for p in PREFIXES])
     names = Table({"Hsap_1": Rec("GENE", "HGNC:1", "current"), "Drer_1": Rec("gene", "ZDB-1", "current"), "Drer_2": Rec("gene2", "ZDB-2", "current")})
     out = tmp / "out"
+    prm = kw.pop("prm", Params())
     with mock.patch.object(pilot, "load_species_tree", lambda: st()), \
          mock.patch.object(pilot, "load_leaf_species", lambda layout, part, only=None: FakeLS()), \
          mock.patch.object(pilot, "load_names", lambda layout, part: names):
-        summary = pilot.run_pilot(layout, cat, FakeClades(), "Mzeb", 100, Params(), [0.25], out, n_denovo=0, **kw)
+        summary = pilot.run_pilot(layout, cat, FakeClades(), "Mzeb", 100, prm, [0.25], out, n_denovo=0, **kw)
     return summary, out
 
 
@@ -127,3 +128,24 @@ def test_parsimony_columns_labels_and_summary_in_the_whole_pilot(tmp_path):
     assert P["check_copy_positions"]["retained_ohnolog"]["different_sequence_pct"] == 100.0
     assert summary["A"]["parsimony_agreement"]["agree_pct_when_both_called"] == 100.0
     assert "## Lost duplicate or retained ohnolog by parsimony" in (out / "pilot_report.md").read_text()
+
+
+def test_tiers_in_the_whole_pilot_with_and_without_published_pairs(tmp_path):
+    summary, out = run(tmp_path, all_genes=True)
+    t = rows(out / "pilot_genes.TreeFam.tsv")
+    assert (t["Mzeb_1"]["t_row"], t["Mzeb_1"]["t_tier"]) == ("R1", "core")
+    assert (t["Mzeb_2"]["t_row"], t["Mzeb_2"]["t_tier"]) == ("R2", "core") and t["Mzeb_2"]["t_positions"] == "dispersed"
+    assert (t["Mzeb_4"]["t_row"], t["Mzeb_4"]["t_tier"]) == ("R5", "core")
+    T = summary["A"]["tiers"]["TreeFam"]
+    assert T["placed"] == 5 and T["core"] == 5 and T["published_pair_evidence_loaded"] is False
+    assert "## Confidence tiers for B1" in (out / "pilot_report.md").read_text()
+    d = tmp_path / "pairs"
+    d.mkdir()
+    for lvl in ("Strict", "Relaxed"):
+        (d / f"drerio_Pairs_{lvl}_3R.txt").write_text("Ohno1\tOhno2\tSymbol1\tSymbol2\tOg\tSelf\tOutgroup Support\tDuplication time\tGene type\n"
+                                                      "E1\tE2\tgene\tgene2\t1e-9\t1e-5\t7\tFishWGD\tprotein_coding\n")
+    summary2, out2 = run(tmp_path / "second", all_genes=True, prm=Params(ohnologs_dir=str(d))) if (tmp_path / "second").mkdir() is None else (None, None)
+    t2 = rows(out2 / "pilot_genes.TreeFam.tsv")
+    assert t2["Mzeb_2"]["t_pairs_relaxed_n"] == "1" and t2["Mzeb_2"]["t_pairs_species"] == "zebrafish"
+    assert summary2["ohnologs_species_loaded"] == ["zebrafish"]
+    assert summary2["A"]["tiers"]["TreeFam"]["published_pair_evidence_loaded"] is True

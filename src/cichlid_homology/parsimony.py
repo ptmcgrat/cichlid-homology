@@ -25,7 +25,18 @@ from .orthology import TELEOST_LEVELS
 INF = 10 ** 6
 JAWED = ("gnathostome", "teleost", "percomorph", "ovalentaria", "cichlid")
 LABEL = {1: "lost_duplicate", 2: "retained_ohnolog", 3: "multi_copy"}
-COST_SETS = ((1, 1), (1, 2), (2, 1))          # (cost of a gain, cost of a loss)
+PRIMARY = (2, 1)          # (cost of a gain, cost of a loss): calibrated against published pairs (0.9.1 grid)
+UNIT = (1, 1)
+
+
+def neighbours(cs):
+    """The settings with half and twice the gain-to-loss ratio, used to flag labels that depend on the costs."""
+    g, l = cs
+    return ((g // 2, l) if g >= 2 else (g, l * 2)), (g * 2, l)
+
+
+def cost_sets(primary=PRIMARY):
+    return tuple(dict.fromkeys((primary, UNIT) + neighbours(primary)))
 # calibration grid (optional): (cost of a gain, cost of a loss, teleost duplication free)
 GRID = tuple((g, 1, free) for free in (False, True) for g in (1, 2, 3, 4, 6, 8))
 
@@ -174,7 +185,7 @@ def classify(costs: dict):
 
 
 class ParsimonyContext:
-    def __init__(self, st, clades, kcap: int = 6, grid=()):
+    def __init__(self, st, clades, kcap: int = 6, grid=(), primary=PRIMARY):
         self.st, self.clades, self.K = st, clades, kcap
         self.children = [[] for _ in st.parent]
         for i, p in enumerate(st.parent):
@@ -182,7 +193,9 @@ class ParsimonyContext:
                 self.children[p].append(i)
         self._level, self._pt, self._cache = {}, {}, {}
         self.grid = tuple(grid)
-        sets = set(COST_SETS) | {(g, l) for g, l, _ in self.grid}
+        self.primary = tuple(primary)
+        self.cost_sets = cost_sets(self.primary)
+        sets = set(self.cost_sets) | {(g, l) for g, l, _ in self.grid}
         self.trans = {cs: trans_matrix(kcap, *cs) for cs in sets}
         self.trans_free = {cs: trans_matrix_wgd(kcap, *cs) for cs in sets}
 
@@ -228,27 +241,28 @@ class ParsimonyContext:
         return {s: _cost_forced(pt, f, g, s, self.K, self.trans[cs], tT=tT) for s in (1, 2, 3)}
 
     def _score(self, pt, obs_loss, obs_miss):
-        per_cs = {cs: self._costs(pt, obs_loss, cs) for cs in COST_SETS}
+        per_cs = {cs: self._costs(pt, obs_loss, cs) for cs in self.cost_sets}
         labels = {cs: classify(c)[0] for cs, c in per_cs.items()}
-        unit = per_cs[(1, 1)]
-        label_unit, margin = classify(unit)
-        robust = len(set(labels.values())) == 1 and label_unit != "ambiguous"
-        miss_costs = self._costs(pt, obs_miss, (1, 1))
-        label_miss, margin_miss = classify(miss_costs)
-        res = {"p_label": label_unit if robust else "ambiguous", "p_label_unit": label_unit, "p_robust": robust,
-               "p_margin": margin, "p_cost1": unit[1], "p_cost2": unit[2], "p_cost3": unit[3],
+        prim = per_cs[self.primary]
+        label, margin = classify(prim)
+        stable = {labels[self.primary]} == {labels[cs] for cs in (self.primary,) + neighbours(self.primary)}
+        robust = stable and label != "ambiguous"
+        label_unit = labels[UNIT]
+        label_miss, margin_miss = classify(self._costs(pt, obs_miss, self.primary))
+        res = {"p_label": label, "p_label_unit": label_unit, "p_robust": robust,
+               "p_margin": margin, "p_cost1": prim[1], "p_cost2": prim[2], "p_cost3": prim[3],
                "p_label_missing": label_miss, "p_margin_missing": margin_miss,
-               "p_zero_modes_agree": (label_miss == label_unit) if label_unit != "ambiguous" and label_miss != "ambiguous" else ""}
+               "p_zero_modes_agree": (label_miss == label) if label != "ambiguous" and label_miss != "ambiguous" else ""}
         for g, l, free in self.grid:
             lab, mar = classify(self._costs(pt, obs_loss, (g, l), free))
             res[f"pg_{grid_name(g, l, free)}"] = lab
             res[f"pgm_{grid_name(g, l, free)}"] = mar
-        res.update(self._events(pt, obs_loss, label_unit, unit))
+        res.update(self._events(pt, obs_loss, label, prim))
         return res
 
     def _events(self, pt, obs, label, unit):
         s = min(unit, key=lambda x: (unit[x], x))              # one optimal teleost-ancestor state
-        K, trans = self.K, self.trans[(1, 1)]
+        K, trans = self.K, self.trans[self.primary]
         f, g, arg = _tables(pt, obs, K, trans, forced=s, want_arg=True)
         state = [None] * len(pt.children)
         state[pt.root] = 1

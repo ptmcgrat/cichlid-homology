@@ -58,3 +58,21 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - Next: score the grid against the published pairs (OHNOLOGS v2, zebrafish; medaka, stickleback and Tetraodon once
   their genes are mapped) and pick the setting that agrees best; use gene-level evidence (positions, published
   pairs) for the cases that remain.
+
+
+## 0.10.0: calibration result and the tiers
+- Calibration (0.9.1 grid, Compara, 26,608 genes; positives: 2,637 genes in observed cichlid pairs or in published
+  pairs of two or more percomorphs; negatives: 8,192 genes with one human and one zebrafish gene and no published
+  pair). Recall / false positives: share-based thresholds (pair at the teleost root) 84.0% / 0.8%; parsimony gain 2
+  loss 1: 82.4% / 5.8%; gain 1: 74.2% / 3.0%; robust unit costs: 63.6% / 1.3%; both calls: 79.0% / 0.7%; either:
+  87.4% / 5.9%. Higher gain costs overshoot (gain 6-8 with a free teleost duplication: 40-44% false positives).
+- The share cutoff (0.5) sits on a flat optimum: cutoffs 0.3 to 0.6 score within 1.2 points of each other.
+- A free teleost duplication did not improve the overall score and is not used; the option stays in the grid.
+- The percomorph-only pattern (all early teleosts single, percomorphs double) is the same under "a pair at the
+  teleost root with early losses" and "a new duplicate in the percomorphs"; no cost setting separates them (a
+  gain would have to cost about eight times a loss). Independent evidence (published pairs) is used for these.
+- Positions alone are weak evidence for a pair (45 to 58% of genes with two copies that are not pairs are also on
+  different sequences), so they give `possible`, not `probable`.
+- The published lists are incomplete (about 40% of zebrafish genes named with an a or b are in them): a gene in a
+  pair is evidence for one; a gene in no pair is not evidence against.
+- For the pipeline the OHNOLOGS files belong in the coordinator's inputs; until then they are given on the command line.

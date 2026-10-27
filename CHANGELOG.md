@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.10.0 (calibrated parsimony and confidence tiers for B1)
+- Parsimony costs are now a gain of 2 and a loss of 1 (`--gain-cost`, `--loss-cost`), chosen in 0.9.1's grid against
+  published teleost-duplication pairs (OHNOLOGS v2): recall of known pairs 82% (63.6% with the old robust unit costs),
+  false positives 5.8%. `p_robust` now means the label holds at half and twice the gain-to-loss ratio and no longer
+  turns the label into `ambiguous`; `p_label_unit` is the label under equal costs, for comparison.
+- `ohnologs.py` and `--ohnologs FOLDER`: reads the OHNOLOGS v2 3R pair files (protein-coding, fish genome
+  duplication) as independent evidence and adds `t_pairs_relaxed_n`, `t_pairs_strict_n`, `t_pairs_species`. The
+  files are given by the owner; nothing is downloaded. Optional: without it the tiers use positions only.
+- `tiers.py`: one row per gene in the confidence table for B1: `t_row` (R1 lost early; R2 both kept; R3 both kept,
+  zebrafish lost one; R2/3/4 a pair whose depth the counts cannot fix; R5 later cichlid duplicate), `t_call`,
+  `t_tier` (core: the share-based and parsimony calls agree; probable: one calls a pair and a published pair
+  agrees; possible: one calls a pair and the copies are on different sequences, weak evidence; disputed; outside:
+  not scored, expanded family or many copies), `t_basis` and `t_positions`. No new cutoffs.
+- Report: a tiers section per method. Previewed on the Compara table of 0.9.1 (26,608 genes): 18,575 placed in a
+  row: core 15,880 (85%), probable 356, possible 597, disputed 1,742 (9%); core lost duplicates are in a published
+  pair for 1.8%, core pairs for 45%, disputed genes for 4.7%.
+- 120 offline tests.
+
 ## 0.9.1 (calibration grid for the parsimony costs)
 - `cichlid-homology pilot ... --parsimony-grid` also labels every gene by parsimony under twelve cost settings:
   a gain costs 1, 2, 3, 4, 6 or 8 times a loss, each with and without a free teleost duplication (one extra copy

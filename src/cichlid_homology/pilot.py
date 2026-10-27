@@ -24,10 +24,12 @@ from .report import write_report
 from .orthology import RTree, relationship
 from .read import load_family, read_tsv
 from .rooting import root_tree
+from .ohnologs import SUPPORT_COLS, load_pair_sets, support
 from .origin import attach_origin
 from .parsimony import GRID, GRID_COLS, ParsimonyContext
 from .owngenes import gene_order, own_genes
 from .quality import attach_quality
+from .tiers import TIER_COLS, assign as assign_tiers
 from .species import SHADOW_RULE, drop_shadowed, load_leaf_species
 from .symbols import attach_symbol_check, attach_symbol_check_a, matched, own_symbols
 from .tree import leaves, parse_newick, prune
@@ -67,7 +69,7 @@ ORIG_COLS = ["orig_basis", "orig_copies_n", "orig_class", "orig_nearest_copy", "
              "orig_copies_same_seqid", "orig_copy_ids"]
 QUAL_COLS = ["risk_flags", "n_risk_flags", "gt_partial", "gt_low_quality", "gt_internal_stops",
              "gt_protein_length", "gt_description"]
-COLUMNS = BASE_COLS + A_COLS + B_COLS + P_COLS + GRID_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+COLUMNS = BASE_COLS + A_COLS + B_COLS + P_COLS + GRID_COLS + SUPPORT_COLS + TIER_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
 SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 
@@ -168,7 +170,15 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
         genes, order, own = {}, {}, {}
         summary["own_genes_error"] = traceback.format_exc()[-800:]
     all_rows = {}
-    pctx = ParsimonyContext(st, clades, prm.parsimony_kcap, GRID if prm.parsimony_grid else ()) if prm.parsimony else None
+    pctx = (ParsimonyContext(st, clades, prm.parsimony_kcap, GRID if prm.parsimony_grid else (), (prm.gain_cost, prm.loss_cost))
+            if prm.parsimony else None)
+    pair_sets = {}
+    if prm.ohnologs_dir:
+        try:
+            pair_sets = load_pair_sets(prm.ohnologs_dir)
+        except Exception:
+            summary["ohnologs_error"] = traceback.format_exc()[-800:]
+        summary["ohnologs_species_loaded"] = sorted(pair_sets)
     for part in PARTS:
         t0 = time.time()
         if all_genes:
@@ -233,6 +243,12 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
                 attach_quality(rows, genes)
             except Exception:
                 summary.setdefault("origin_error", traceback.format_exc()[-800:])
+            try:
+                for r in rows:
+                    r.update(support(r, pair_sets))
+                    r.update(assign_tiers(r))
+            except Exception:
+                summary.setdefault("tiers_error", traceback.format_exc()[-800:])
             for r in rows:                                   # the long hidden lists are no longer needed
                 for key in [x for x in r if x.startswith("_") and x.endswith("_leaves")]:
                     del r[key]

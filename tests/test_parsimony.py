@@ -6,8 +6,8 @@ TEL = ["aang", "danio_rerio", "trub", "gacu", "olat", "maylandia_zebra", "acal"]
 SCOPE = frozenset(OUT + TEL)
 
 
-def ctx():
-    return ParsimonyContext(st(), FakeClades(), kcap=6)
+def ctx(primary=(1, 1)):
+    return ParsimonyContext(st(), FakeClades(), kcap=6, primary=primary)
 
 
 def counts(**kw):
@@ -59,7 +59,7 @@ def test_with_denser_sampling_a_zebrafish_loss_is_found():
     scope = frozenset(OUT + tel)
     c = {s: (2 if s in tel else 1) for s in scope}
     c["danio_rerio"] = 1
-    r = ParsimonyContext(SpeciesTree(newick), Clades(), 6).score(c, scope)
+    r = ParsimonyContext(SpeciesTree(newick), Clades(), 6, primary=(1, 1)).score(c, scope)
     assert r["p_label"] == "retained_ohnolog" and r["p_robust"] is True
     assert r["p_loss_species"] == "danio_rerio" and r["p_losses_below_T"] == 1 and r["p_cost2"] == 2 and r["p_cost1"] == 3
 
@@ -145,3 +145,27 @@ def test_percomorph_only_pair_stays_lost_until_gains_are_much_costlier_than_loss
     r = ParsimonyContext(st(), FakeClades(), 6, GRID).score(c, SCOPE)
     assert r["pg_g1l1"] == "lost_duplicate" and r["pg_g2l1"] == "lost_duplicate"
     assert r["pg_g3l1f"] == "retained_ohnolog"              # a free teleost duplication plus a costly gain flips it
+
+
+def test_default_costs_are_a_gain_of_two_and_a_loss_of_one():
+    from cichlid_homology.parsimony import PRIMARY, cost_sets, neighbours
+    assert PRIMARY == (2, 1) and neighbours((2, 1)) == ((1, 1), (4, 1)) and neighbours((1, 1)) == ((1, 2), (2, 1))
+    assert cost_sets((2, 1)) == ((2, 1), (1, 1), (4, 1))
+    c = {s: (2 if s in TEL else 1) for s in SCOPE}
+    c["danio_rerio"] = 1
+    d = ParsimonyContext(st(), FakeClades(), 6)
+    r = d.score(c, SCOPE)
+    assert d.primary == (2, 1) and r["p_label"] == "retained_ohnolog"           # the unit-cost tie is resolved
+    assert r["p_label_unit"] == "ambiguous" and r["p_robust"] is False          # but the call depends on the costs
+    assert r["p_cost2"] == 3 and r["p_cost1"] == 4                              # gain 2 + loss 1 against two gains of 2
+
+
+def test_the_default_keeps_a_percomorph_only_pair_as_lost_and_a_clean_pair_robust():
+    d = ParsimonyContext(st(), FakeClades(), 6)
+    c = {s: 1 for s in SCOPE}
+    for s in ("trub", "gacu", "olat", "maylandia_zebra", "acal"):
+        c[s] = 2
+    assert d.score(c, SCOPE)["p_label"] == "lost_duplicate"
+    c2 = {s: (2 if s in TEL else 1) for s in SCOPE}
+    r = d.score(c2, SCOPE)
+    assert r["p_label"] == "retained_ohnolog" and r["p_robust"] is True

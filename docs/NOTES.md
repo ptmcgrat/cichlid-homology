@@ -51,3 +51,13 @@
 - Identifier mappings: solved for TreeFam and Compara by `ReferenceNames` (Dispatch 7); OrthoFinder's IDs are later.
 - Thresholds: see `pilot_plan.md`; they are settled only after the pilot is run on real data.
 - Return type of `load_master_tree()` and import path of `LeafSpecies` are assumed; `cichlid-homology probe` checks them.
+
+
+## The seven histories (0.10.0)
+Copies of one family per species, as counts: R1 a duplicate lost early (one copy everywhere); R2 both copies kept;
+R3 both kept, zebrafish lost one; R4 a new duplicate in the percomorphs (the same counts as R3 repeated in every
+early teleost); R5 a later duplicate in the cichlids; R6 reciprocal losses (each species one copy, but different
+copies; counts cannot see it, the tree shape can); R7 both kept with one genome unannotated (a zero looks like a
+loss). Counts cannot separate R3 from R4, R6 from R1, or R7 from R2 and R3; the tiers say so (`R2/3/4`) instead of
+guessing. Reference: Inoue et al. 2015 (PNAS 112:14918), Pasquier et al. 2017 (J Exp Zool B 328:709), Singh and
+Isambert 2020 (NAR 48:D724), Conant 2020 (PLoS ONE 15:e0231356), Garcia de la Serrana et al. 2014 (GBE 6:981).
