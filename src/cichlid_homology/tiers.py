@@ -68,7 +68,8 @@ def _n(v) -> int:
 
 
 def _before_cichlids(row, cl, p, pos, pub):
-    older = [x for x in LADDER if x in cl]
+    tree = str(row.get("d_dup_level")) if str(row.get("d_call")) == "later_duplicate_before_cichlids" else ""
+    older = [x for x in LADDER if x in cl or x == tree]
     ok = p == "lost_duplicate" and older and _n(row.get("orig_copies_n")) >= 2 and pos == "tandem" and not pub
     return ";".join(older) if ok else ""
 

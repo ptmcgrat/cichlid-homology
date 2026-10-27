@@ -120,3 +120,14 @@ large clades (expanded families), and whether to tell the coordinator that the s
   mode at 0.8 to 1.0, a valley at 0.3 to 0.5; 0.5 is kept.
 - Many-copy families: a tree pair is evidence of a pair (39.0% in a published pair, against 8.8% without shared species and
   43.6% for ordinary pairs); in expanded families it is weak (14.9% against 6.0%) and they stay unclassified.
+
+
+## 0.12.0: where the pair is in the tree
+- Compara, 0.11.3 run, 2,637 published-pair positives and 8,192 negatives: the pair at the top of the gene's teleost clade only:
+  56.5% / 0.3%; at the deepest supported duplication: 82.4% / 0.5%; thresholds 84.0% / 0.8%; thresholds or the tree 91.0% / 0.9%.
+- The tree-based `later_duplicate_before_cichlids` calls of 0.11.3 were mostly the teleost pair below an incongruent top; the
+  genuine ones (percomorph or ovalentarian level) were 53 genes in Compara, because in a placement tree duplications among
+  project genes are not visible. The tiers' own category (parsimony events, tandem copies, no published pair) found 132.
+- To check on the next run: how many genes are now `pair` and whether they look like pairs (different sequences, published
+  pairs), how many `later_duplicate_before_cichlids` remain and whether they look like local duplicates (tandem copies, no
+  published pair), and the `shared_early` / `early_within` split.

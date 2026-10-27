@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.0 (tree dating: the pair is the deepest supported duplication)
+- Run of 0.11.3 on Compara: the later-duplicate calls fell from 15,304 to 2,418 and the categories matched the preview. But
+  1,328 of the 1,381 genes the tree called `later_duplicate_before_cichlids` were at the teleost level with a `disjoint` root and
+  looked like pairs (80% on different sequences, 35% in a published pair, 71% human OneToTwo): the top of the gene's teleost
+  clade is where the tree disagrees with the species tree, and the real teleost duplication is a node below it.
+- The pair node is now the DEEPEST duplication with at least `--pair-overlap` (0.5) shared species on the path from the gene up
+  through its teleost clade (new columns `d_dup_level`, `d_dup_at_root`; `d_support`, `d_lineages`, `d_overlap` and
+  `d_gene_lineage` describe that node). On the 0.11.3 table, calling a pair where the deepest supported duplication is at the
+  teleost level gives 82.4% of the 2,637 published-pair positives at 0.5% of the 8,192 negatives (J 81.9); thresholds 84.0% /
+  0.8% (J 83.2); thresholds or tree 91.0% / 0.9% (J 90.2).
+- The level of a duplication is `teleost` only if early teleosts are in two lineages (`both_early`), or an early teleost has
+  genes on both sides (`shared_early`), or every early-teleost gene of the clade is inside the node (`early_within`: a pair whose
+  second copy was lost in all the early teleosts; a later duplicate would leave the early genes outside). Otherwise it is the
+  level of the species the two sides share. A stray early-teleost gene inside one percomorph lineage therefore does not make a
+  percomorph duplicate a teleost pair.
+- `d_call`: `pair` (deepest supported duplication at the teleost level), `pair_unresolved_depth` (the gene's whole teleost clade is
+  a duplication with no early teleosts), `later_duplicate_before_cichlids`, `later_duplicate_in_cichlids`, `thin_pair`,
+  `lost_duplicate`. Tiers: the tree level also feeds the later-duplicate-before-cichlids rule. 144 offline tests.
+
 ## 0.11.3 (later duplications need shared species; many-copy pairs)
 - Run of 0.11.2 on Compara: the teleost clade fix dated 90% of genes (65% before) and the pair call works: 56.5% of
   published-pair positives are tree pairs against 0.3% of negatives, none of the 9,541 core lost duplicates is a pair, and

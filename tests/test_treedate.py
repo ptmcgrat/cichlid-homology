@@ -38,8 +38,8 @@ def test_a_pair_at_the_teleost_root_has_two_lineages_each_with_early_teleosts():
 def test_a_pair_kept_by_percomorphs_only_in_one_lineage_has_weaker_support():
     perc = "((Trub_2,Gacu_2),(Olat_2,(Mzeb_2,Acal_2)))"
     r = run(f"({OUT},({fish(1)},{perc}));", "Mzeb_2")
-    assert (r["d_root"], r["d_root_level"], r["d_support"], r["d_call"]) == ("pair", "teleost", "one_early", "pair")
-    assert 0.5 < r["d_overlap"] < 1.0
+    assert (r["d_root"], r["d_dup_level"], r["d_support"], r["d_call"]) == ("pair", "teleost", "early_within", "pair")
+    assert 0.5 < r["d_overlap"] < 1.0                      # all the early-teleost genes are inside one lineage: the second copy was lost there
 
 
 def test_a_new_duplicate_in_the_percomorphs_is_a_later_duplicate_not_a_pair():
@@ -111,11 +111,12 @@ def test_the_overlap_separates_a_retained_pair_from_reciprocal_losses_and_from_a
     # a percomorph-only duplicate with one stray early-teleost gene (Aang_2) inside a percomorph clade: a false pair at the root
     p1, p2 = "((Trub_1,Gacu_1),(Olat_1,(Mzeb_1,Acal_1),Aang_2))", "((Trub_2,Gacu_2),(Olat_2,(Mzeb_2,Acal_2)))"
     stray = run(f"({OUT},(Aang_1,(Drer_1,({p1},{p2}))));", "Mzeb_1")
-    assert stray["d_root"] == "thin" and stray["d_overlap"] < 0.2 and stray["d_call"] == "thin_pair"   # almost nothing supports it
+    assert stray["d_root"] == "thin"                                          # the root has almost nothing to support it
+    assert (stray["d_call"], stray["d_dup_level"]) == ("later_duplicate_before_cichlids", "percomorph")   # the stray does not make it a teleost pair
     # a stray early-teleost gene of another species (Drer_2) does not make a pair: it only lowers the level of the later duplicate
     p1b = "((Trub_1,Gacu_1),(Olat_1,(Mzeb_1,Acal_1),Drer_2))"
     weak = run(f"({OUT},(Aang_1,(Drer_1,({p1b},{p2}))));", "Mzeb_1")
-    assert weak["d_root"] == "single" and weak["d_first_later_level"] == "teleost"
+    assert weak["d_root"] == "single" and weak["d_first_later_level"] == "percomorph"
 
 
 def test_the_overlap_cutoff_is_a_parameter():
@@ -136,3 +137,17 @@ def test_a_node_where_the_gene_tree_disagrees_with_the_species_tree_is_not_a_lat
     real = "(((Trub_1,Mzeb_1),(Trub_2,Mzeb_2)),Olat_1)"                 # the same shape with species in both halves: a duplication
     r2 = run(f"({OUT},(Aang_1,(Drer_1,{real})));", "Mzeb_1")
     assert r2["d_call"] == "later_duplicate_before_cichlids" and r2["d_first_later_level"] == "percomorph"
+
+
+def test_a_real_pair_below_a_top_that_disagrees_with_the_species_tree_is_found():
+    """Eel (Aang) is single and sits above the pair of (zebrafish + percomorphs) lineages: the pair node is below the root."""
+    p1, p2 = "((Trub_1,Gacu_1),(Olat_1,(Mzeb_1,Acal_1)))", "((Trub_2,Gacu_2),(Olat_2,(Mzeb_2,Acal_2)))"
+    r = run(f"({OUT},(Aang_1,((Drer_1,{p1}),(Drer_2,{p2}))));", "Mzeb_1")
+    assert (r["d_root"], r["d_call"], r["d_dup_level"], r["d_dup_at_root"]) == ("single", "pair", "teleost", "no")
+    assert (r["d_support"], r["d_overlap"], r["d_focal_lineages"]) == ("both_early", 1.0, 2)
+
+
+def test_a_duplicate_of_percomorphs_alone_is_unresolved_when_no_early_teleost_is_in_the_clade():
+    p1, p2 = "((Trub_1,Gacu_1),(Olat_1,(Mzeb_1,Acal_1)))", "((Trub_2,Gacu_2),(Olat_2,(Mzeb_2,Acal_2)))"
+    r = run(f"({OUT},({p1},{p2}));", "Mzeb_1")
+    assert (r["d_call"], r["d_dup_level"], r["d_support"], r["d_dup_at_root"]) == ("pair_unresolved_depth", "percomorph", "none_early", "yes")

@@ -60,3 +60,8 @@ and the call `later_duplicate_before_cichlids` in `t_call`; `t_row` is `R4` for 
 
 ## Changes in 0.11.1
 `d_root` is `pair`, `thin`, `disjoint` or `single`; `d_call` adds `thin_pair`; `d_status` no longer has `teleosts_not_monophyletic`.
+
+
+## Changes in 0.12.0
+New `d_dup_level` and `d_dup_at_root`; `d_support` takes `both_early`, `shared_early`, `early_within`, `one_early`, `none_early` and, with
+`d_lineages`, `d_overlap`, `d_gene_lineage`, describes the deepest supported duplication (or the teleost root when there is none).
