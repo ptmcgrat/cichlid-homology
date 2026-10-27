@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import collections
 import csv
+import sys
 import json
 import random
 import time
@@ -23,6 +24,9 @@ from .report import write_report
 from .orthology import RTree, relationship
 from .read import load_family, read_tsv
 from .rooting import root_tree
+from .origin import attach_origin
+from .owngenes import gene_order, own_genes
+from .quality import attach_quality
 from .species import SHADOW_RULE, drop_shadowed, load_leaf_species
 from .symbols import attach_symbol_check, attach_symbol_check_a, matched, own_symbols
 from .tree import leaves, parse_newick, prune
@@ -50,11 +54,15 @@ B_COLS = (["b_anchor", "b_label", "b_label_raw", "expanded_family", "b_pattern",
           + [f"b_{lv}_{k}" for lv in ("teleost", "percomorph", "ovalentaria", "cichlid")
              for k in ("n", "1", "2", "3p")])
 SYMBOL_COLS = ["own_symbol", "human_symbol_match", "zebrafish_symbol_match"]
-A_FIELDS = ["cat", "ref_n", "focal_n", "clade_leaves", "best", "best_dist", "tie", "best_symbol", "best_id",
+A_FIELDS = ["cat", "group", "ref_n", "focal_n", "clade_leaves", "best", "best_dist", "tie", "best_symbol", "best_id",
             "best_name_status", "best_name_reliable", "name_confidence", "ref_ids", "ref_symbols",
             "ref_unreliable", "symbol_match", "symbol_match_any"]
 A_COLS = [f"a_{k}_{f}" for k in REFS for f in A_FIELDS]
-COLUMNS = BASE_COLS + A_COLS + B_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
+ORIG_COLS = ["orig_basis", "orig_copies_n", "orig_class", "orig_nearest_copy", "orig_gap_genes", "orig_gap_bp",
+             "orig_copies_same_seqid", "orig_copy_ids"]
+QUAL_COLS = ["risk_flags", "n_risk_flags", "gt_partial", "gt_low_quality", "gt_internal_stops",
+             "gt_protein_length", "gt_description"]
+COLUMNS = BASE_COLS + A_COLS + B_COLS + ORIG_COLS + QUAL_COLS + SYMBOL_COLS + [f"{k}_{c}" for k in REFS for c in NAME_COLS] + [f"{k}_{c}" for k in REFS for c in REF_COLS] + TEL_COLS
 SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 EXPANDED = 10     # n_ref or n_focal at least this large = an expanded family, reported separately
 
@@ -120,14 +128,15 @@ def choose_genes(candidates, n, seed=1):
 
 
 def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path,
-              n_denovo: int = 100) -> dict:
+              n_denovo: int = 100, all_genes: bool = False) -> dict:
     prefixes = {s.prefix for s in cat.species(release="v1")}
     st = load_species_tree()
     out_dir.mkdir(parents=True, exist_ok=True)
     summary = {"cichlid_homology": __version__, "species": species,
                "parameters": {**asdict(prm), "alt_overlap_t": list(alt_t), "n_genes": n,
-                              "n_denovo_genes_per_method": n_denovo, "shadow_rule": SHADOW_RULE,
-                              "rooting_rule": ROOT_RULE, "mouse": "out of scope for release 1"}}
+                              "n_denovo_genes_per_method": n_denovo, "all_genes": all_genes,
+                              "shadow_rule": SHADOW_RULE, "rooting_rule": ROOT_RULE,
+                              "mouse": "out of scope for release 1"}}
     res = {p: layout.results("v1", p) for p in PARTS}
     assign = {p: {r["gene_id"]: r for r in read_tsv(res[p].assign(species).local)} for p in PARTS}
     froot = {p: res[p].family("X").local.parent for p in PARTS}
@@ -138,38 +147,59 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
     def folder_ok(p, fam):
         return fam not in ("", "NoHit") and (froot[p] / fam / "done.json").exists()
 
-    # the same genes in both methods: genes that have a finished family in each
-    both = [g for g in assign["TreeFam"] if g in assign["Compara"]
-            and folder_ok("TreeFam", assign["TreeFam"][g]["best_family"])
-            and folder_ok("Compara", assign["Compara"][g]["best_family"])]
-    sampled = set(choose_genes(both, n))
+    finished = {p: {g for g, r in assign[p].items() if folder_ok(p, r["best_family"])} for p in PARTS}
+    both = sorted(finished["TreeFam"] & finished["Compara"])
+    sampled = set(both) if all_genes else set(choose_genes(both, n))
     summary["genes_with_a_family_in_both_methods"] = len(both)
     summary["genes_sampled"] = len(sampled)
-    all_rows = {}
+    summary["run"] = {"mode": "all genes" if all_genes else "sample",
+                      "species_genes_total": max(len(assign[p]) for p in PARTS),
+                      "finished_family_genes": {p: len(finished[p]) for p in PARTS}}
     try:
-        own = own_symbols(layout, species)
+        genes = own_genes(layout, species)
+        order = gene_order(genes)
+        own = {g: i["symbol"] for g, i in genes.items()}
     except Exception:
-        own = {}
-        summary["own_symbols_error"] = traceback.format_exc()[-800:]
+        genes, order, own = {}, {}, {}
+        summary["own_genes_error"] = traceback.format_exc()[-800:]
+    all_rows = {}
     for part in PARTS:
         t0 = time.time()
-        gset = set(sampled)
-        dn_all = [g for g, r in gp[part].items() if r["mode"] == "denovo"
-                  and folder_ok(part, r["family"])]
-        gset |= set(choose_genes(dn_all, n_denovo, seed=2))
-        fam_ids = sorted({assign[part][g]["best_family"] for g in gset if g in assign[part]
-                          and folder_ok(part, assign[part][g]["best_family"])})
-        fams = {}
-        for f in fam_ids:
-            try:
-                fams[f] = load_family(froot[part] / f, prefixes, f)
-            except Exception:
-                fams[f] = None
-        ls = load_leaf_species(layout, part, only={x for fm in fams.values() if fm for x in fm.leaves})
+        if all_genes:
+            gset = set(finished[part])
+        else:
+            gset = set(sampled)
+            dn_all = [g for g, r in gp[part].items() if r["mode"] == "denovo" and folder_ok(part, r["family"])]
+            gset |= set(choose_genes(dn_all, n_denovo, seed=2))
+        fam_ids = sorted({assign[part][g]["best_family"] for g in gset if g in finished[part]})
+        if all_genes:
+            ls = load_leaf_species(layout, part)            # the whole mapping file, loaded once
+            load = lambda f, part=part: load_family(froot[part] / f, prefixes, f)
+        else:
+            fams = {}
+            for f in fam_ids:
+                try:
+                    fams[f] = load_family(froot[part] / f, prefixes, f)
+                except Exception:
+                    fams[f] = None
+            ls = load_leaf_species(layout, part, only={x for fm in fams.values() if fm for x in fm.leaves})
+            load = lambda f, fams=fams: fams[f]
         shadowed = set(ls.shadowed())
+        names_error, table = None, None
+        try:
+            table = load_names(layout, part)
+        except Exception:
+            names_error = traceback.format_exc()[-1200:]
         rows_part, errors, per_family = [], [], []
         sens = collections.Counter()
-        for f, fam in fams.items():
+        for k, f in enumerate(fam_ids):
+            if all_genes and k and k % 500 == 0:
+                print(f"{part}: {k}/{len(fam_ids)} families, {len(rows_part)} genes, "
+                      f"{time.time() - t0:.0f} s", file=sys.stderr, flush=True)
+            try:
+                fam = load(f)
+            except Exception:
+                fam = None
             if fam is None:
                 errors.append({"family": f, "error": "unreadable family folder"})
                 continue
@@ -184,18 +214,25 @@ def run_pilot(layout, cat, clades, species, n, prm: Params, alt_t, out_dir: Path
                 r.update(method=part, sampled=r["gene_id"] in gset,
                          placement_status=p.get("status", ""), lwr=p.get("lwr", ""),
                          assign_flags=a.get("flags", ""), fusion_partner=a.get("fusion_partner", ""))
+            if table is not None:
+                try:
+                    attach_names(rows, table)
+                    attach_names_a(rows, table)
+                    attach_symbol_check(rows, own)
+                    attach_symbol_check_a(rows, own)
+                except Exception:
+                    names_error = names_error or traceback.format_exc()[-1200:]
+            try:
+                attach_origin(rows, genes, order, prm.tandem_max_gap)
+                attach_quality(rows, genes)
+            except Exception:
+                summary.setdefault("origin_error", traceback.format_exc()[-800:])
+            for r in rows:                                   # the long hidden lists are no longer needed
+                for key in [x for x in r if x.startswith("_") and x.endswith("_leaves")]:
+                    del r[key]
             rows_part.extend(rows)
             sens.update(info.pop("sens", {}))
             per_family.append({"family": f, **info})
-        names_error = None
-        try:
-            table = load_names(layout, part)
-            attach_names(rows_part, table)
-            attach_names_a(rows_part, table)
-            attach_symbol_check(rows_part, own)
-            attach_symbol_check_a(rows_part, own)
-        except Exception:
-            names_error = traceback.format_exc()[-1200:]
         all_rows[part] = rows_part
         with open(out_dir / f"pilot_genes.{part}.tsv", "w", newline="") as fh:
             w = csv.DictWriter(fh, fieldnames=COLUMNS, delimiter="\t", extrasaction="ignore", restval="")

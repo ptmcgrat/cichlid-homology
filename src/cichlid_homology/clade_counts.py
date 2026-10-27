@@ -18,6 +18,11 @@ from .orthology import RTree, _path_len
 from .tree import Node
 
 CATS = ("OneToOne", "OneToTwo", "OneToMany", "ManyToOne", "ManyToMany", "None")
+# the groups used in the report (the fine category stays in the gene tables):
+#   human     OneToOne, OneToTwo, OneToMany, Other (= ManyToOne + ManyToMany), None
+#   zebrafish OneToOne, OneToMany (= 1:2 and 1:many), Other (= ManyToOne + ManyToMany), None
+GROUPS = {"human": ("OneToOne", "OneToTwo", "OneToMany", "Other", "None"),
+          "zebrafish": ("OneToOne", "OneToMany", "Other", "None")}
 TOL = 1e-9
 
 
@@ -27,6 +32,13 @@ def category(n_ref: int, n_focal: int) -> str:
     if n_ref == 1:
         return "OneToOne" if n_focal == 1 else "OneToTwo" if n_focal == 2 else "OneToMany"
     return "ManyToOne" if n_focal == 1 else "ManyToMany"
+
+
+def group(key: str, cat: str) -> str:
+    if key == "human":
+        return "Other" if cat in ("ManyToOne", "ManyToMany") else cat
+    return {"OneToOne": "OneToOne", "None": "None", "OneToTwo": "OneToMany",
+            "OneToMany": "OneToMany"}.get(cat, "Other")
 
 
 def smallest_clade(rt: RTree, g: Node, species: set) -> Node | None:
@@ -45,7 +57,7 @@ def smallest_clade(rt: RTree, g: Node, species: set) -> Node | None:
 
 def clade_counts(rt: RTree, g: Node, ref: str, own: str) -> dict:
     out = {"cat": "None", "ref_n": 0, "focal_n": 0, "clade_leaves": 0, "best": "", "best_dist": "",
-           "tie": False, "ref_leaves": [], "node": None}
+           "tie": False, "ref_leaves": [], "focal_leaves": [], "node": None}
     a = smallest_clade(rt, g, {ref})
     if a is None:
         return out
@@ -57,5 +69,6 @@ def clade_counts(rt: RTree, g: Node, ref: str, own: str) -> dict:
     out.update(cat=category(len(ref_in), len(focal_in)), ref_n=len(ref_in), focal_n=len(focal_in),
                clade_leaves=a.hi - a.lo, best=best, best_dist=round(best_d, 6),
                tie=sum(1 for d, _ in scored if abs(d - best_d) <= TOL) > 1,
-               ref_leaves=sorted(x.name for x in ref_in), node=a)
+               ref_leaves=sorted(x.name for x in ref_in),
+               focal_leaves=sorted(x.name for x in focal_in), node=a)
     return out

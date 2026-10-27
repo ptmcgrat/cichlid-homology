@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.8.0
+- Whole-genome mode: `cichlid-homology pilot --all` calls every gene of the species that has a finished family in a
+  method (the 0.7.0 pilot called a biased sample); `--species Mzeb,Acal` runs several species (a folder each).
+  Families are streamed one at a time; progress goes to stderr; `--all` skips the old rooting-stability and
+  overlap-sensitivity checks.
+- Category groups as the owner asked: human OneToOne, OneToTwo, OneToMany, Other (= ManyToOne + ManyToMany), None;
+  zebrafish OneToOne, OneToMany (= 1:2 and 1:many), Other, None. The fine category stays in `a_<ref>_cat`; the group
+  is `a_<ref>_group`; the report and summaries use the groups.
+- Where the extra copies sit (`origin.py`, `owngenes.py`): for genes with 2+ focal copies in the reference clade
+  (human clade, else zebrafish), the nearest other copy is tandem_adjacent, tandem_near (at most `--tandem-gap`
+  genes between, default 10), same_seqid_distant, or different_seqid, from the genes table positions. Columns
+  `orig_*`.
+- Artifact-risk flags (`quality.py`): low placement support (lwr < 0.5), fusion candidate, partial or low-quality
+  gene model, internal stops, extra copy in one cichlid species only. Columns `risk_flags`, `n_risk_flags`, `gt_*`.
+- Candidate tables `pilot_candidates.<method>.tsv` for `cichlid_specific_duplication` genes, and report sections
+  for the origin of extra copies and the candidates (carriers, origin, flags, genes in both methods).
+- 92 offline tests, including the whole pilot on a fake layout in sample and all-genes mode.
+
 ## 0.7.0 (pilot of a simpler A1 and A2; not agreed with the coordinator)
 - `clade_counts.py`: for each focal-species gene and each reference species (human, zebrafish), the smallest clade
   holding the gene and a reference gene; counts of reference genes and of focal-species genes in it (other cichlids

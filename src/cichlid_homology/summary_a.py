@@ -1,12 +1,14 @@
-"""Summaries of the 0.7.0 counts: overall numbers per method, agreement between TreeFam and Compara,
-the best reference gene, the NCBI-symbol check, and the teleost distribution (goal B) by category."""
+"""Summaries of the counts: overall numbers per method, agreement between TreeFam and Compara, the best
+reference gene, the NCBI-symbol check, the teleost distribution (goal B), where the extra copies sit, and the
+cichlid-specific candidates with their artifact-risk flags. Categories are reported as groups:
+human OneToOne / OneToTwo / OneToMany / Other / None; zebrafish OneToOne / OneToMany / Other / None."""
 from __future__ import annotations
 
 import collections
 import csv
 from pathlib import Path
 
-from .clade_counts import CATS
+from .clade_counts import GROUPS
 from .consensus import label_agreement
 from .symbols import matched
 
@@ -14,6 +16,14 @@ REFS = ("human", "zebrafish")
 A, B = "TreeFam", "Compara"
 SIZE_BINS = {"1": (1, 1), "2-3": (2, 3), "4-9": (4, 9), "10+": (10, 10 ** 9)}
 NO_B = (None, "", "no_anchor", "no_orthologous_anchor", "insufficient_species", "expanded_family")
+ORIGIN_CLASSES = ("tandem_adjacent", "tandem_near", "same_seqid_distant", "different_seqid", "no_position")
+PROFILE_LABELS = ("retained_pair", "cichlid_specific_duplication", "multi_copy", "single", "partial_retention",
+                  "cichlid_lost_one_copy", "insufficient_species", "no_anchor")
+CAND_COLS = ["gene_id", "own_symbol", "family", "family_mzeb_genes", "tree_mode", "a_human_cat", "a_human_best_symbol",
+             "a_zebrafish_cat", "a_zebrafish_best_symbol", "b_pattern", "b_cichlid_with2p", "b_cichlid_n",
+             "b_cichlid_extra_species", "orig_basis", "orig_copies_n", "orig_class", "orig_nearest_copy",
+             "orig_gap_genes", "orig_gap_bp", "orig_copy_ids", "risk_flags", "n_risk_flags", "lwr", "assign_flags",
+             "gt_partial", "gt_low_quality", "gt_internal_stops", "gt_protein_length", "gt_description"]
 
 
 def _i(v):
@@ -47,21 +57,25 @@ def _hist(v, bins=10):
     return h
 
 
+def _g(key):
+    return f"a_{key}_group"
+
+
 def overall(rows, key):
     n = len(rows)
-    c = collections.Counter(r[f"a_{key}_cat"] for r in rows)
-    have = [r for r in rows if r[f"a_{key}_cat"] != "None"]
+    c = collections.Counter(r[_g(key)] for r in rows)
+    have = [r for r in rows if r[_g(key)] != "None"]
     return {
         "genes": n,
-        "categories": {cat: {"n": c.get(cat, 0), "pct": _pct(c.get(cat, 0), n)} for cat in CATS},
+        "categories": {cat: {"n": c.get(cat, 0), "pct": _pct(c.get(cat, 0), n)} for cat in GROUPS[key]},
         "by_family_size": {lab: dict(collections.Counter(
-            r[f"a_{key}_cat"] for r in rows if lo <= _i(r["family_mzeb_genes"]) <= hi))
+            r[_g(key)] for r in rows if lo <= _i(r["family_mzeb_genes"]) <= hi))
             for lab, (lo, hi) in SIZE_BINS.items()},
         "genes_with_a_reference_gene": len(have),
         "best_gene_tied_on_path_length": sum(1 for r in have if r[f"a_{key}_tie"]),
         "best_gene_name_confidence_low": sum(1 for r in have if r.get(f"a_{key}_name_confidence") == "low"),
-        "median_clade_leaves": {cat: _median([_i(r[f"a_{key}_clade_leaves"]) for r in have
-                                              if r[f"a_{key}_cat"] == cat]) for cat in CATS[:-1]},
+        "median_clade_leaves": {cat: _median([_i(r[f"a_{key}_clade_leaves"]) for r in have if r[_g(key)] == cat])
+                                for cat in GROUPS[key][:-1]},
     }
 
 
@@ -75,7 +89,7 @@ def agreement(by, genes, key):
     both = same = ref_same = foc_same = one_none = both_none = 0
     for g in genes:
         ra, rb = by[A][g], by[B][g]
-        a, b = ra[f"a_{key}_cat"], rb[f"a_{key}_cat"]
+        a, b = ra[_g(key)], rb[_g(key)]
         lab, _, _ = label_agreement({A: None if a == "None" else a, B: None if b == "None" else b})
         labels[lab] += 1
         pairs[(a, b)] += 1
@@ -115,7 +129,7 @@ def best_gene_agreement(by, genes, key, out_dir: Path | None = None):
     states, adj, diffs = collections.Counter(), collections.Counter(), []
     for g in genes:
         ra, rb = by[A][g], by[B][g]
-        if ra[f"a_{key}_cat"] == "None" or rb[f"a_{key}_cat"] == "None":
+        if ra[_g(key)] == "None" or rb[_g(key)] == "None":
             continue
         ia = ra.get(f"a_{key}_best_id", "") if ra.get(f"a_{key}_best_name_reliable") else ""
         ib = rb.get(f"a_{key}_best_id", "") if rb.get(f"a_{key}_best_name_reliable") else ""
@@ -134,7 +148,7 @@ def best_gene_agreement(by, genes, key, out_dir: Path | None = None):
             if len(diffs) < 3000:
                 diffs.append({"gene_id": g, "question": key, "state": state, "own_symbol": ra.get("own_symbol", ""),
                               "TreeFam_best": ra.get(f"a_{key}_best_symbol", ""), "Compara_best": rb.get(f"a_{key}_best_symbol", ""),
-                              "TreeFam_cat": ra[f"a_{key}_cat"], "Compara_cat": rb[f"a_{key}_cat"],
+                              "TreeFam_group": ra[_g(key)], "Compara_group": rb[_g(key)],
                               "TreeFam_symbol_match": ra.get(f"a_{key}_symbol_match", ""),
                               "Compara_symbol_match": rb.get(f"a_{key}_symbol_match", ""),
                               "TreeFam_family": ra["family"], "Compara_family": rb["family"]})
@@ -156,8 +170,8 @@ def symbol_summary(rows):
     for key in REFS:
         g = f"a_{key}_symbol_match"
         per = {}
-        for cat in CATS[:-1]:
-            sub = [r for r in rows if r[f"a_{key}_cat"] == cat and r.get(g) in ("exact", "stem", "none")]
+        for cat in GROUPS[key][:-1]:
+            sub = [r for r in rows if r[_g(key)] == cat and r.get(g) in ("exact", "stem", "none")]
             per[cat] = {"checkable": len(sub), "exact_pct": _pct(sum(1 for r in sub if r[g] == "exact"), len(sub)),
                         "exact_or_stem_pct": _pct(sum(1 for r in sub if matched(r[g])), len(sub))}
         out[key] = per
@@ -167,12 +181,12 @@ def symbol_summary(rows):
 def goal_b(rows):
     C = collections.Counter
     out = {}
-    for cat in CATS:
-        sub = [r for r in rows if r["a_human_cat"] == cat]
+    for cat in GROUPS["human"]:
+        sub = [r for r in rows if r["a_human_group"] == cat]
         out[f"human_{cat}"] = {"genes": len(sub), "labels": dict(C(r.get("b_label") for r in sub)),
                                "anchor": dict(C(r.get("b_anchor") for r in sub))}
     for cat in ("OneToOne", "OneToTwo"):
-        sc = [r for r in rows if r["a_human_cat"] == cat
+        sc = [r for r in rows if r["a_human_group"] == cat
               and r.get("b_label_raw", r.get("b_label")) not in NO_B and _f(r.get("b_other_share2p")) is not None]
         carriers = C(f"{_i(r['b_cichlid_with2p'])} of {_i(r['b_cichlid_n'])} cichlid species" for r in sc
                      if r.get("b_label") == "cichlid_specific_duplication")
@@ -191,7 +205,7 @@ def goal_b_agreement(by, genes):
     n = 0
     for g in genes:
         ra, rb = by[A][g], by[B][g]
-        if ra["a_human_cat"] not in focus or rb["a_human_cat"] not in focus:
+        if ra["a_human_group"] not in focus or rb["a_human_group"] not in focus:
             continue
         n += 1
         va = None if ra.get("b_label") in NO_B else ra["b_label"]
@@ -205,16 +219,60 @@ def goal_b_agreement(by, genes):
             "pairs_TreeFam_Compara": [[list(map(str, k)), v] for k, v in pairs.most_common(15)]}
 
 
+def _dist(sub):
+    c = collections.Counter(r.get("orig_class") for r in sub)
+    n = len(sub)
+    d = {k: {"n": c.get(k, 0), "pct": _pct(c.get(k, 0), n)} for k in ORIGIN_CLASSES}
+    d["genes"] = n
+    return d
+
+
+def origin_summary(rows):
+    """Where the extra copies sit, for genes with two or more focal-species copies in the reference clade."""
+    multi = [r for r in rows if _i(r.get("orig_copies_n")) >= 2]
+    by_label = {}
+    for lab in PROFILE_LABELS:
+        sub = [r for r in multi if r.get("b_label_raw", r.get("b_label")) == lab]
+        if sub:
+            by_label[lab] = _dist(sub)
+    near = [_i(r["orig_gap_genes"]) for r in multi if r.get("orig_class") == "tandem_near"]
+    return {"genes_with_2plus_copies_in_the_reference_clade": len(multi), "all": _dist(multi),
+            "by_teleost_profile_label": by_label,
+            "by_human_group": {g: _dist([r for r in multi if r["a_human_group"] == g])
+                               for g in ("OneToTwo", "OneToMany", "Other", "None")},
+            "median_genes_between_tandem_near_copies": _median(near)}
+
+
+def candidates(rows, out_dir: Path, method: str):
+    """Cichlid-specific duplication candidates, with origin and artifact-risk flags; written to a table."""
+    cand = [r for r in rows if r.get("b_label") == "cichlid_specific_duplication"]
+    if cand:
+        with open(out_dir / f"pilot_candidates.{method}.tsv", "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=CAND_COLS, delimiter="\t", extrasaction="ignore", restval="")
+            w.writeheader()
+            w.writerows(cand)
+    share = collections.Counter()
+    for r in cand:
+        k = _i(r.get("b_cichlid_with2p")) / max(1, _i(r.get("b_cichlid_n")))
+        share[">=70% of cichlid species" if k >= .7 else "30-70%" if k >= .3 else "<30%"] += 1
+    flags = collections.Counter(f for r in cand for f in (r.get("risk_flags") or "").split(";") if f)
+    return {"genes": len(cand), "carriers": dict(share), "origin": dict(_dist(cand)),
+            "risk_flag_counts": dict(flags.most_common()),
+            "with_no_risk_flag": sum(1 for r in cand if _i(r.get("n_risk_flags")) == 0),
+            "with_2plus_risk_flags": sum(1 for r in cand if _i(r.get("n_risk_flags")) >= 2)}
+
+
 def write_splits(by, genes, out_dir: Path):
     rows = []
     for key in REFS:
         for g in genes:
             ra, rb = by[A][g], by[B][g]
-            a, b = ra[f"a_{key}_cat"], rb[f"a_{key}_cat"]
+            a, b = ra[_g(key)], rb[_g(key)]
             if a == "None" or b == "None" or a == b:
                 continue
             rows.append({"gene_id": g, "question": key, "own_symbol": ra.get("own_symbol", ""),
-                         "TreeFam_cat": a, "Compara_cat": b,
+                         "TreeFam_group": a, "Compara_group": b,
+                         "TreeFam_cat": ra[f"a_{key}_cat"], "Compara_cat": rb[f"a_{key}_cat"],
                          "TreeFam_ref_n": ra[f"a_{key}_ref_n"], "TreeFam_focal_n": ra[f"a_{key}_focal_n"],
                          "Compara_ref_n": rb[f"a_{key}_ref_n"], "Compara_focal_n": rb[f"a_{key}_focal_n"],
                          "TreeFam_clade_leaves": ra[f"a_{key}_clade_leaves"], "Compara_clade_leaves": rb[f"a_{key}_clade_leaves"],
@@ -233,12 +291,21 @@ def write_splits(by, genes, out_dir: Path):
 def build(all_rows, out_dir: Path) -> dict:
     by = {m: {r["gene_id"]: r for r in rows} for m, rows in all_rows.items()}
     genes = sorted(set(by[A]) & set(by[B]))
+    cands = {m: candidates(rows, out_dir, m) for m, rows in all_rows.items()}
+    ids = {m: {r["gene_id"] for r in rows if r.get("b_label") == "cichlid_specific_duplication"}
+           for m, rows in all_rows.items()}
+    clean = {m: {r["gene_id"] for r in rows if r.get("b_label") == "cichlid_specific_duplication"
+                 and _i(r.get("n_risk_flags")) == 0} for m, rows in all_rows.items()}
     out = {"genes_called": {m: len(rows) for m, rows in all_rows.items()}, "genes_in_both_methods": len(genes),
            "overall": {m: {k: overall(rows, k) for k in REFS} for m, rows in all_rows.items()},
            "agreement": {k: agreement(by, genes, k) for k in REFS},
            "best_gene": {k: best_gene_agreement(by, genes, k, out_dir) for k in REFS},
            "symbol_check": {m: symbol_summary(rows) for m, rows in all_rows.items()},
            "goal_B": {m: goal_b(rows) for m, rows in all_rows.items()},
-           "goal_B_agreement": goal_b_agreement(by, genes)}
+           "goal_B_agreement": goal_b_agreement(by, genes),
+           "origin": {m: origin_summary(rows) for m, rows in all_rows.items()},
+           "candidates": cands,
+           "candidates_in_both_methods": len(ids[A] & ids[B]),
+           "candidates_in_both_methods_with_no_risk_flag_in_either": len(clean[A] & clean[B])}
     out["category_splits_written"] = write_splits(by, genes, out_dir)
     return out

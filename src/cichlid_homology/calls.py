@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from .dating import Params, birth_of_copy, date_mask, date_node, level_of_species
 from .orthology import RTree, relationship, teleost_pattern
-from .clade_counts import clade_counts
+from .clade_counts import clade_counts, group
 from .profile import clade_profile_v2
 from .tree import Node
 
@@ -17,6 +17,8 @@ def call_gene(rt: RTree, g: Node, own: str, prm: Params, clades, tree_mode: str,
     for key, ref in REFS.items():
         c = clade_counts(rt, g, ref, own)
         row[f"a_{key}_cat"] = c["cat"]
+        row[f"a_{key}_group"] = group(key, c["cat"])
+        row[f"_a_{key}_focal_leaves"] = c["focal_leaves"]
         row[f"a_{key}_ref_n"] = c["ref_n"]
         row[f"a_{key}_focal_n"] = c["focal_n"]
         row[f"a_{key}_clade_leaves"] = c["clade_leaves"]

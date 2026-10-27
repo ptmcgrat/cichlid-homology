@@ -1,6 +1,7 @@
 import csv
 from pathlib import Path
 
+from cichlid_homology.clade_counts import group
 from cichlid_homology.names import attach_names_a
 from cichlid_homology.report import write_report
 from cichlid_homology.summary_a import build, overall, symbol_summary
@@ -23,7 +24,8 @@ class Table:
 
 def row(gene, fam, h, z, own="", fsize=2, hbest="", zbest="", hleaves=(), zleaves=(), b="single", hn=(1, 1), zn=(1, 1)):
     return {"gene_id": gene, "family": fam, "family_mzeb_genes": fsize, "own_symbol": own,
-            "a_human_cat": h, "a_human_ref_n": hn[0], "a_human_focal_n": hn[1], "a_human_clade_leaves": 9,
+            "a_human_cat": h, "a_human_group": group("human", h), "a_zebrafish_group": group("zebrafish", z),
+            "a_human_ref_n": hn[0], "a_human_focal_n": hn[1], "a_human_clade_leaves": 9,
             "a_human_best": hbest, "a_human_tie": False, "_a_human_ref_leaves": list(hleaves),
             "a_zebrafish_cat": z, "a_zebrafish_ref_n": zn[0], "a_zebrafish_focal_n": zn[1], "a_zebrafish_clade_leaves": 5,
             "a_zebrafish_best": zbest, "a_zebrafish_tie": False, "_a_zebrafish_ref_leaves": list(zleaves),

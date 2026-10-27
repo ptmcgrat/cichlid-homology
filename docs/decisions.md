@@ -38,3 +38,9 @@ provisional: set them from the histograms in `pilot_summary.json` (`goal_B`).
 Replaces the overlap-based relationship and the `paralog` category. The pilot's report shows whether the two methods
 agree on the counts and on the best reference gene. To decide after reading it: keep the counts, how to treat very
 large clades (expanded families), and whether to tell the coordinator that the sheet's `paralog` category is replaced.
+
+
+## 0.8.0: whole-genome run, groups, origin of extra copies
+- Category groups and `--all` as above. Tandem threshold: at most 10 genes between two copies (`--tandem-gap`).
+- Open: what counts as a real cichlid-specific duplication (the 0.7.0 pilot found 4 to 12% of extra-copy genes had
+  extra copies only in cichlids); how to use the risk flags; which copy is the older one needs OrthoFinder.

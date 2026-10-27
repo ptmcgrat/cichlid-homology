@@ -113,15 +113,23 @@ def _pilot(args) -> int:
     from .pilot import run_pilot
 
     layout = get_layout()
-    out = Path(args.out).expanduser() if args.out else default_out("pilot")
+    base = Path(args.out).expanduser() if args.out else default_out("pilot")
     prm = Params(overlap_t=args.overlap, min_levels_each_side=args.min_levels,
                  mostly_one_to_one=args.mostly, k_roots=args.k_roots,
-                 kept_frac=args.kept, lost_frac=args.lost)
-    s = run_pilot(layout, Catalog.load(layout), Clades.load(), args.species, args.n, prm,
-                  [float(x) for x in args.alt_overlap.split(",") if x], out, n_denovo=args.n_denovo)
-    print((out / "pilot_report.md").read_text())
-    print(f"\nwritten to {out}")
-    print(f"report: {out / 'pilot_report.md'}   full summary: {out / 'pilot_summary.json'}")
+                 kept_frac=args.kept, lost_frac=args.lost, tandem_max_gap=args.tandem_gap)
+    species = [x.strip() for x in args.species.split(",") if x.strip()]
+    alt = [] if args.all else [float(x) for x in args.alt_overlap.split(",") if x]
+    if args.all:
+        prm.k_roots = 1          # the rooting-stability check belongs to the old relationship columns
+    cat, clades = Catalog.load(layout), Clades.load()
+    for sp in species:
+        out = base / sp if len(species) > 1 else base
+        run_pilot(layout, cat, clades, sp, args.n, prm, alt, out,
+                  n_denovo=args.n_denovo, all_genes=args.all)
+        if len(species) == 1:
+            print((out / "pilot_report.md").read_text())
+        print(f"\n{sp}: written to {out}")
+        print(f"report: {out / 'pilot_report.md'}   full summary: {out / 'pilot_summary.json'}")
     return 0
 
 
@@ -221,7 +229,7 @@ def main(argv=None) -> int:
     s2.add_argument("--out", default=None)
     s2.set_defaults(func=_survey2)
     p = sub.add_parser("pilot", help="rooting, relationships, dating, TreeFam vs Compara (writes scratch files)")
-    p.add_argument("--species", default="Mzeb")
+    p.add_argument("--species", default="Mzeb", help="one prefix, or several separated by commas (Mzeb,Acal)")
     p.add_argument("--n", type=int, default=600, help="genes sampled (the same in both methods)")
     p.add_argument("--n-denovo", type=int, default=100, help="extra genes from de novo families, per method")
     p.add_argument("--overlap", type=float, default=0.0, help="species-overlap threshold (0 = any shared species)")
@@ -229,6 +237,8 @@ def main(argv=None) -> int:
     p.add_argument("--min-levels", type=int, default=2)
     p.add_argument("--mostly", type=float, default=0.8)
     p.add_argument("--k-roots", type=int, default=3)
+    p.add_argument("--all", action="store_true", help="every gene of the species (not a sample)")
+    p.add_argument("--tandem-gap", type=int, default=10, help="genes between two copies at or below which they are tandem")
     p.add_argument("--kept", type=float, default=0.5, help="share of species with 2+ copies counted as kept")
     p.add_argument("--lost", type=float, default=0.3, help="share below which the extra copy counts as absent")
     p.add_argument("--out", default=None, help="default: ~/share/pilot_<version>_<timestamp>")

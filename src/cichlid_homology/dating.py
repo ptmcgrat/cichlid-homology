@@ -20,6 +20,7 @@ class Params:
     many_frac: float = 0.3          # share of non-cichlid species with 3 or more copies: a multi-copy family
     min_other: int = 3              # fewest non-cichlid teleost species needed to label
     expanded_min: int = 10          # M. zebra genes in a family at or above which it counts as expanded
+    tandem_max_gap: int = 10        # genes between two copies at or below which they count as tandem
 
 
 def level_of_species(clades, sp):

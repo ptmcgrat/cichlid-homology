@@ -1,9 +1,13 @@
-"""A readable Markdown report of the 0.7.0 summary (overall numbers and agreement)."""
+"""A readable Markdown report of the summary: coverage, overall numbers, agreement between the methods,
+the symbol check, the teleost distribution, where the extra copies sit, and the cichlid-specific candidates."""
 from __future__ import annotations
 
 from pathlib import Path
 
-from .clade_counts import CATS
+from .clade_counts import GROUPS
+from .summary_a import ORIGIN_CLASSES
+
+NAMES = {"human": "Human (A1)", "zebrafish": "Zebrafish (A2)"}
 
 
 def _table(head, rows):
@@ -14,7 +18,7 @@ def _table(head, rows):
 
 def _cat_rows(A, key):
     t, c = A["overall"]["TreeFam"][key]["categories"], A["overall"]["Compara"][key]["categories"]
-    return [[cat, f"{t[cat]['n']} ({t[cat]['pct']}%)", f"{c[cat]['n']} ({c[cat]['pct']}%)"] for cat in CATS]
+    return [[cat, f"{t[cat]['n']} ({t[cat]['pct']}%)", f"{c[cat]['n']} ({c[cat]['pct']}%)"] for cat in GROUPS[key]]
 
 
 def _size_rows(A, key):
@@ -22,24 +26,32 @@ def _size_rows(A, key):
     for m in ("TreeFam", "Compara"):
         for lab, d in A["overall"][m][key]["by_family_size"].items():
             tot = sum(d.values()) or 1
-            out.append([m, lab, sum(d.values())] + [f"{100 * d.get(cat, 0) / tot:.0f}%" for cat in CATS])
+            out.append([m, lab, sum(d.values())] + [f"{100 * d.get(cat, 0) / tot:.0f}%" for cat in GROUPS[key]])
     return out
+
+
+def _origin_rows(d):
+    return [[k, v["genes"]] + [f"{v[c]['n']} ({v[c]['pct']}%)" for c in ORIGIN_CLASSES[:4]]
+            for k, v in [("all genes with 2+ copies", d["all"])] + list(d["by_teleost_profile_label"].items())]
 
 
 def write_report(summary: dict, path: Path) -> None:
     A = summary["A"]
-    names = {"human": "Human (A1)", "zebrafish": "Zebrafish (A2)"}
+    run = summary.get("run", {})
     L = [f"# Pilot report: cichlid-homology {summary['cichlid_homology']}, focal species {summary['species']}", "",
-         "Categories count reference genes : focal genes in the smallest clade holding the gene and a reference "
-         "gene. Focal = the focal species only. `None` = no gene of that reference species in this method's tree.", "",
+         f"Mode: **{run.get('mode', 'sample')}**. The focal species has {run.get('species_genes_total', '?')} genes in "
+         f"the assignment table; {run.get('finished_family_genes', {})} have a finished family in each method. "
+         "Categories count reference genes : focal genes in the smallest clade holding the gene and a reference gene "
+         "(focal = the focal species only). `None` = no gene of that reference species in this method's tree. "
+         "Human: Other = ManyToOne + ManyToMany. Zebrafish: OneToMany = 1:2 and 1:many, Other = many:1 and many:many.", "",
          "## Overall numbers", "",
          _table(["", "TreeFam", "Compara"],
                 [["genes called", A["genes_called"]["TreeFam"], A["genes_called"]["Compara"]],
                  ["genes called in both methods", A["genes_in_both_methods"], A["genes_in_both_methods"]]]), ""]
     for key in ("human", "zebrafish"):
-        L += [f"### {names[key]}: categories", "", _table(["Category", "TreeFam", "Compara"], _cat_rows(A, key)), "",
-              f"By number of focal genes in the family (share of genes in each category):", "",
-              _table(["Method", "Genes in family", "n"] + list(CATS), _size_rows(A, key)), "",
+        L += [f"### {NAMES[key]}: categories", "", _table(["Category", "TreeFam", "Compara"], _cat_rows(A, key)), "",
+              "By number of focal genes in the family (share of genes in each category):", "",
+              _table(["Method", "Genes in family", "n"] + list(GROUPS[key]), _size_rows(A, key)), "",
               "Median clade size (leaves) by category: TreeFam "
               + str(A["overall"]["TreeFam"][key]["median_clade_leaves"]) + "; Compara "
               + str(A["overall"]["Compara"][key]["median_clade_leaves"]), "",
@@ -52,7 +64,7 @@ def write_report(summary: dict, path: Path) -> None:
     L += ["## Agreement between the methods", ""]
     for key in ("human", "zebrafish"):
         g = A["agreement"][key]
-        L += [f"### {names[key]}", "",
+        L += [f"### {NAMES[key]}", "",
               _table(["", ""], [
                   ["genes in both methods", g["genes_in_both_methods"]],
                   ["both gave a category", g["both_gave_a_category"]],
@@ -65,8 +77,8 @@ def write_report(summary: dict, path: Path) -> None:
               "Most common category pairs (TreeFam, Compara):", "",
               _table(["TreeFam", "Compara", "genes"], [[p[0][0], p[0][1], p[1]] for p in g["category_pairs_TreeFam_Compara"][:12]]), ""]
         b = A["best_gene"][key]
-        L += [f"Best reference gene (official ID, reliable names only): "
-              + ", ".join(f"{k} {v}" for k, v in b.items() if k not in ("adjudication_by_own_ncbi_symbol",)), "",
+        L += ["Best reference gene (official ID, reliable names only): "
+              + ", ".join(f"{k} {v}" for k, v in b.items() if k != "adjudication_by_own_ncbi_symbol"), "",
               f"Where the best genes differ, the gene's own NCBI symbol supports: {b['adjudication_by_own_ncbi_symbol']}", ""]
     L += ["## NCBI symbol check (best gene against the gene's own symbol)", ""]
     for m in ("TreeFam", "Compara"):
@@ -74,7 +86,7 @@ def write_report(summary: dict, path: Path) -> None:
         L += [f"{m}: {s['genes_with_a_real_own_symbol']} of {s['genes']} genes have a real own symbol.", ""]
         rows = []
         for key in ("human", "zebrafish"):
-            for cat in CATS[:-1]:
+            for cat in GROUPS[key][:-1]:
                 d = s[key][cat]
                 if d["checkable"]:
                     rows.append([key, cat, d["checkable"], f"{d['exact_pct']}%", f"{d['exact_or_stem_pct']}%"])
@@ -83,7 +95,7 @@ def write_report(summary: dict, path: Path) -> None:
     for m in ("TreeFam", "Compara"):
         gb = A["goal_B"][m]
         L += [f"### {m}", "", _table(["Human category", "genes", "B1 labels"],
-                                     [[c, gb[f"human_{c}"]["genes"], gb[f"human_{c}"]["labels"]] for c in CATS]), ""]
+                                     [[c, gb[f"human_{c}"]["genes"], gb[f"human_{c}"]["labels"]] for c in GROUPS["human"]]), ""]
         for cat in ("OneToOne", "OneToTwo"):
             d = gb[f"distribution_human_{cat}"]
             L += [f"{cat} ({d['genes_scored']} genes scored). Share of non-cichlid teleost species with 2 or more copies, "
@@ -92,6 +104,30 @@ def write_report(summary: dict, path: Path) -> None:
                   f"Patterns: {d['patterns_(teleost,percomorph,ovalentaria,cichlid)']}.", ""]
     ga = A["goal_B_agreement"]
     L += [f"B1 label agreement for genes OneToOne or OneToTwo in both methods: {ga['genes_OneToOne_or_OneToTwo_in_both_methods']} genes, "
-          f"{ga['labels']}, agree {ga['agree_pct_when_both_labelled']}% when both gave a label.", "",
-          f"Category splits listed in `pilot_category_splits.tsv`: {A['category_splits_written']} rows.", ""]
+          f"{ga['labels']}, agree {ga['agree_pct_when_both_labelled']}% when both gave a label.", ""]
+    L += ["## Where the extra copies sit", "",
+          "For genes with two or more focal-species copies in the reference clade: the nearest other copy is "
+          "adjacent (no gene between), near (at most the set number of genes between), distant on the same "
+          "sequence, or on a different sequence. Teleost-wide duplicates are expected on different sequences; local "
+          "duplications next to each other.", ""]
+    for m in ("TreeFam", "Compara"):
+        o = A["origin"][m]
+        L += [f"### {m}: {o['genes_with_2plus_copies_in_the_reference_clade']} genes with 2+ copies", "",
+              _table(["Teleost profile label", "genes", "adjacent", "near", "same seq., distant", "different seq."],
+                     _origin_rows(o)), ""]
+    L += ["## Cichlid-specific candidates", "",
+          "Genes labelled `cichlid_specific_duplication`: the extra copies are in the cichlids and not in the other "
+          "teleosts. Risk flags are signs of an annotation or placement artifact.", ""]
+    for m in ("TreeFam", "Compara"):
+        c = A["candidates"][m]
+        near = ", ".join("%s %d" % (k, c["origin"][k]["n"]) for k in ORIGIN_CLASSES[:4])
+        L += [f"### {m}: {c['genes']} genes", "",
+              f"Share of cichlid species carrying the extra copy: {c['carriers']}. "
+              f"Nearest other copy: {near}. "
+              f"No risk flag: {c['with_no_risk_flag']}; two or more: {c['with_2plus_risk_flags']}. "
+              f"Flags: {c['risk_flag_counts']}.", ""]
+    L += [f"Candidates in both methods: {A['candidates_in_both_methods']} "
+          f"({A['candidates_in_both_methods_with_no_risk_flag_in_either']} with no risk flag in either).", "",
+          f"Category splits listed in `pilot_category_splits.tsv`: {A['category_splits_written']} rows. "
+          "Candidate tables: `pilot_candidates.TreeFam.tsv`, `pilot_candidates.Compara.tsv`.", ""]
     Path(path).write_text("\n".join(L))

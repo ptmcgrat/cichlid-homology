@@ -102,3 +102,16 @@ def test_goal_b_labels_on_the_human_clade():
     g = leaf(rt, "Mzeb_1")
     r = clade_profile_v2(rt, g, FakeClades(), Params(), clade_counts(rt, g, HUM, OWN)["node"])
     assert r["b_label"] == "retained_pair" and r["b_pattern"] == "++++"
+
+
+def test_groups_follow_the_owners_scheme():
+    from cichlid_homology.clade_counts import GROUPS, group
+    assert [group("human", c) for c in CATS] == ["OneToOne", "OneToTwo", "OneToMany", "Other", "Other", "None"]
+    assert [group("zebrafish", c) for c in CATS] == ["OneToOne", "OneToMany", "OneToMany", "Other", "Other", "None"]
+    assert GROUPS["zebrafish"] == ("OneToOne", "OneToMany", "Other", "None")
+
+
+def test_clade_counts_keeps_the_focal_leaves():
+    t = ("((Hsap_1,Mmus_1),(Locu_1,(Drer_1,((Mzeb_1,Acal_1),(Mzeb_2,Acal_2)))));")
+    h = counts(t, HUM)
+    assert h["focal_leaves"] == ["Mzeb_1", "Mzeb_2"]
