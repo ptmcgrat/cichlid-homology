@@ -8,7 +8,9 @@ gene table. This counts them. Nothing is written into an input folder and nothin
 from __future__ import annotations
 
 import collections
+import csv
 import json
+import re
 from pathlib import Path
 
 from .read import leaf_names
@@ -28,9 +30,13 @@ def survey_family(folder, ls, clades, prefixes, focal_prefix="Mzeb", names=NAMES
         mode = json.loads((folder / "done.json").read_text()).get("tree_mode", "")
     except Exception:
         mode = ""
-    leaves = leaf_names((folder / "tree.nwk").read_text())
+    return survey_tree(folder.name, (folder / "tree.nwk").read_text(), mode, ls, clades, prefixes, focal_prefix, names)
+
+
+def survey_tree(name, nwk, mode, ls, clades, prefixes, focal_prefix="Mzeb", names=NAMES) -> dict:
+    leaves = leaf_names(re.sub(r"\[[^\]]*\]", "", nwk))            # NHX or other bracketed comments are dropped
     row = {c: 0 for c in COLS}
-    row.update(family=folder.name, tree_mode=mode, n_leaves=len(leaves), has_focal_gene=0)
+    row.update(family=name, tree_mode=mode, n_leaves=len(leaves), has_focal_gene=0)
     species, tel = set(), set()
     cache = {}
 
@@ -167,3 +173,103 @@ def run_survey(root, family_ids, ls, clades, prefixes, focal_prefix="Mzeb", prog
 def finished_families(root) -> list:
     root = Path(root)
     return sorted(p.name for p in root.iterdir() if p.is_dir() and (p / "done.json").exists() and (p / "tree.nwk").exists())
+
+
+REF_EXTRA = ["audit_status", "built", "hit_by_project"]
+REF_COLS = COLS + REF_EXTRA
+
+
+def tree_files(trees_dir) -> dict:
+    """{family id: path} for the regular files of a folder of reference trees; the id is the name up to the first dot."""
+    out = {}
+    for p in sorted(Path(trees_dir).iterdir()):
+        if p.is_file():
+            out.setdefault(p.name.split(".")[0], p)
+    return out
+
+
+def read_audit(path):
+    """({family: status}, header) from family_audit.tsv: the columns named family and status, else the first two."""
+    path = Path(path)
+    if not path.is_file():
+        return {}, []
+    with open(path, newline="") as fh:
+        rd = csv.DictReader(fh, delimiter="\t")
+        head = list(rd.fieldnames or [])
+        fam = "family" if "family" in head else (head[0] if head else None)
+        st = "status" if "status" in head else (head[1] if len(head) > 1 else None)
+        return {r[fam]: (r[st] if st else "") for r in rd if fam and r.get(fam)}, head
+
+
+def run_reference_survey(prepared, ls, clades, built=(), hit=(), focal_hit=(), audit=None, progress=None,
+                         names=NAMES, limit=0) -> tuple:
+    """Survey the coordinator's prepared reference trees. `built`: the families with a result folder; `hit`: the families any
+    project species was assigned to; `focal_hit`: those the focal species was assigned to. Returns (rows, diagnostics)."""
+    prepared = Path(prepared)
+    files = tree_files(prepared / "trees")
+    ids = sorted(files)[:limit] if limit else sorted(files)
+    audit = audit if audit is not None else read_audit(prepared / "family_audit.tsv")[0]
+    built, hit, focal_hit = set(built), set(hit), set(focal_hit)
+    rows, ext = [], collections.Counter(p.suffix or "(none)" for p in files.values())
+    for i, fid in enumerate(ids, 1):
+        try:
+            r = survey_tree(fid, files[fid].read_text(), "reference", ls, clades, set(), "", names)
+        except Exception as e:
+            r = {**{c: 0 for c in COLS}, "family": fid, "tree_mode": f"unreadable:{type(e).__name__}"}
+        r.update(audit_status=audit.get(fid, "not_in_audit"), built=int(fid in built), hit_by_project=int(fid in hit),
+                 has_focal_gene=int(fid in focal_hit))
+        rows.append(r)
+        if progress and i % 5000 == 0:
+            progress(i, len(ids))
+    diag = {"tree_files": len(files), "extensions": dict(ext), "first_files": [p.name for p in list(files.values())[:3]],
+            "audit_rows": len(audit), "audit_statuses": dict(collections.Counter(audit.values())),
+            "families_in_audit_without_a_tree_file": sum(1 for f in audit if f not in files),
+            "unknown_leaves_total": sum(r["n_unknown_leaves"] for r in rows),
+            "unreadable": sum(1 for r in rows if str(r["tree_mode"]).startswith("unreadable"))}
+    return rows, diag
+
+
+def summarize_reference(rows, diag) -> dict:
+    out = summarize(rows)
+    out["diagnostics"] = diag
+    human = [r for r in rows if r["n_human"] > 0]
+    ht = [r for r in human if r["n_teleost_ref_leaves"] > 0]
+    nt = [r for r in human if r["n_teleost_ref_leaves"] == 0]
+    out["reference"] = {
+        "human_and_teleost": {"families": len(ht), "built": sum(r["built"] for r in ht), "hit_by_a_project_species": sum(r["hit_by_project"] for r in ht),
+                              "hit_by_the_focal_species": sum(r["has_focal_gene"] for r in ht),
+                              "not_hit_by_any_project_species": sum(1 for r in ht if not r["hit_by_project"])},
+        "human_and_no_teleost": {"families": len(nt), "built": sum(r["built"] for r in nt), "hit_by_a_project_species": sum(r["hit_by_project"] for r in nt),
+                                 "audit_statuses": dict(collections.Counter(r["audit_status"] for r in nt)),
+                                 "median_leaves": _median([r["n_leaves"] for r in nt]), "median_species": _median([r["n_species"] for r in nt])},
+        "teleost_and_no_human": {"families": sum(1 for r in rows if r["n_teleost_ref_leaves"] > 0 and r["n_human"] == 0),
+                                 "built": sum(r["built"] for r in rows if r["n_teleost_ref_leaves"] > 0 and r["n_human"] == 0)},
+        "by_audit_status": {st: {"families": sum(1 for r in rows if r["audit_status"] == st),
+                                 "with_human": sum(1 for r in human if r["audit_status"] == st)}
+                            for st in sorted({r["audit_status"] for r in rows})},
+        "human_genes_histogram_by_hit": {"hit_by_a_project_species": _hist([r["n_human"] for r in rows if r["hit_by_project"]]),
+                                         "not_hit": _hist([r["n_human"] for r in rows if not r["hit_by_project"]])}}
+    return out
+
+
+def report_reference_text(s: dict, part: str) -> str:
+    d, ref = s["diagnostics"], s["reference"]
+    L = [f"# Reference-tree survey: {part} (the coordinator's prepared input)", "",
+         f"{s['families']} reference trees read ({d['tree_files']} files; extensions {d['extensions']}; first files {d['first_files']}). "
+         f"family_audit.tsv: {d['audit_rows']} rows, statuses {d['audit_statuses']}; {d['families_in_audit_without_a_tree_file']} audited families "
+         f"have no tree file. Leaves with no species: {d['unknown_leaves_total']}; unreadable trees: {d['unreadable']}.", "",
+         "## Human genes per reference family", ""]
+    h = s["human_genes_per_family_histogram"]
+    mx = max(h.values()) or 1
+    L += ["| human genes | families | |", "|---|---|---|"] + [f"| {k} | {v} | {'#' * max(0, int(40 * v / mx))} |" for k, v in h.items()]
+    L += ["", f"{s['with_human']} reference families hold at least one human gene; exactly one in {s['exactly_one_human_gene']}; median "
+              f"{s['median_human_genes_where_present']} where present.", "",
+          "## Human genes and teleosts, and which of them the project built", "",
+          f"Human and at least one reference teleost: {ref['human_and_teleost']}.", "",
+          f"Human and no reference teleost: {ref['human_and_no_teleost']}.", "",
+          f"Teleost and no human: {ref['teleost_and_no_human']}.", "",
+          "| human genes | no teleost | with teleost |", "|---|---|---|"]
+    L += [f"| {k} | {v['no_teleost']} | {v['with_teleost']} |" for k, v in s["human_genes_by_teleost_presence"].items()]
+    L += ["", f"By audit status: {ref['by_audit_status']}.", "",
+          f"Human genes per family, families hit by a project species against not hit: {ref['human_genes_histogram_by_hit']}.", ""]
+    return "\n".join(L)

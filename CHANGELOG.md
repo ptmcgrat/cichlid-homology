@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.1 (family survey of the coordinator's prepared reference trees)
+- `cichlid-homology family-survey --part Compara --source reference [--prepared PATH]` reads the coordinator's prepared Compara116 trees
+  (`Inputs/Families/Compara116/prepared/trees/`), counts human, mouse, zebrafish, gar and reedfish genes, reference teleost genes and species,
+  and joins each family with its `family_audit.tsv` status, with whether the project built it (a folder under Results) and with whether any
+  project species (or the focal species) was assigned to it. The report gives the histogram of human genes per reference family, the families
+  with human genes and no teleost, the families with human and teleost genes that no project species hit, and the audit statuses.
+- The file formats of `prepared/` are not documented in the pack, so the reader is adaptive and reports what it finds: file extensions, the
+  family id taken from the file name up to the first dot, the audit columns (`family` and `status`, else the first two), audited families with
+  no tree file, leaves with no species, unreadable trees. Bracketed comments (NHX) in a tree are ignored.
+- Output file names now carry the source: `family_survey.<part>.<built|reference>.tsv|json|md`. 150 offline tests.
+
 ## 0.14.0 (family survey: human genes and teleosts in every family)
 - New read-only command `cichlid-homology family-survey --part Compara`: for every finished family of a method it counts human, mouse,
   zebrafish, gar and reedfish genes, reference teleost genes and species, other jawed vertebrates, tetrapod leaves, unknown leaves, and our

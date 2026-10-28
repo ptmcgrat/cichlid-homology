@@ -155,3 +155,11 @@ large clades (expanded families), and whether to tell the coordinator that the s
   the spread of root-to-tip distances among mammals; agreement of the methods on the closest human gene. Sequence identity would need
   the alignments (computing on residues is not ours); ask project 4 or the coordinator.
 - Cutoffs to be chosen from the data (which cut best predicts agreement and accuracy) or biologically, the owner's choice.
+
+
+## 0.14.1: which data the human-side analysis starts from
+- Owner decision: start the human-side analysis from the coordinator's Compara116 input (all the prepared reference families), not only
+  from the families the project built. The built families are the ones a project species was assigned to (92% hold an M. zebra gene); on
+  them only 12 of 11,219 families with human genes had no reference teleost, which is a property of how the project selects families.
+- The pack says Compara splits some families into separate fish and tetrapod trees, hiding about 2,300 human orthologs per species: a
+  gap on the human side that the reference survey can size.

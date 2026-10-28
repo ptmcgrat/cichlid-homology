@@ -107,37 +107,62 @@ def _survey2(args) -> int:
 
 
 def _family_survey(args) -> int:
-    """Count human, teleost and other genes in every finished family of a method (read-only)."""
+    """Count human, teleost and other genes in every finished family of a method, or in the coordinator's prepared reference trees."""
     import csv
 
     from cichlid_data import Catalog, get_layout
     from cichlid_data.clades import Clades
 
-    from .famsurvey import COLS, finished_families, report_text, run_survey, summarize
+    from . import famsurvey as F
     from .species import load_leaf_species
 
     layout = get_layout()
-    prefixes = {s.prefix for s in Catalog.load(layout).species(release="v1")}
+    cat = Catalog.load(layout)
+    prefixes = {s.prefix for s in cat.species(release="v1")}
     res = layout.results("v1", args.part)
     root = res.family("X").local.parent
-    fams = finished_families(root)
-    if args.limit:
-        fams = fams[: args.limit]
-    print(f"{args.part}: {len(fams)} finished families under {root}; loading the leaf-to-species table ...", flush=True)
-    ls = load_leaf_species(layout, args.part)
-    rows = run_survey(root, fams, ls, Clades.load(), prefixes, args.species,
-                      progress=lambda i, n: print(f"  {i}/{n}", flush=True))
     out = Path(args.out).expanduser() if args.out else default_out("family_survey")
     out.mkdir(parents=True, exist_ok=True)
-    with open(out / f"family_survey.{args.part}.tsv", "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=COLS, delimiter="\t")
+    clades = Clades.load()
+    if args.source == "built":
+        fams = F.finished_families(root)
+        if args.limit:
+            fams = fams[: args.limit]
+        print(f"{args.part}: {len(fams)} finished families under {root}; loading the leaf-to-species table ...", flush=True)
+        ls = load_leaf_species(layout, args.part)
+        rows = F.run_survey(root, fams, ls, clades, prefixes, args.species, progress=lambda i, n: print(f"  {i}/{n}", flush=True))
+        cols, summ, text = F.COLS, F.summarize(rows), None
+    else:
+        if args.prepared:
+            prepared = Path(args.prepared).expanduser()
+        else:
+            fr = layout.family_resource("Compara116" if args.part == "Compara" else "TreeFam9")
+            prepared = Path(getattr(fr, "local", fr)) / "prepared"
+        print(f"reference trees under {prepared}; loading the leaf-to-species table ...", flush=True)
+        built = F.finished_families(root)
+        hit, focal = set(), set()
+        for sp in cat.species(release="v1"):
+            try:
+                fam = {r["best_family"] for r in read_tsv(res.assign(sp.prefix).local) if r["best_family"] not in ("", "NoHit")}
+            except Exception:
+                continue
+            hit |= fam
+            if sp.prefix == args.species:
+                focal = fam
+        ls = load_leaf_species(layout, args.part)
+        rows, diag = F.run_reference_survey(prepared, ls, clades, built, hit, focal, progress=lambda i, n: print(f"  {i}/{n}", flush=True),
+                                            limit=args.limit)
+        cols, summ = F.REF_COLS, F.summarize_reference(rows, diag)
+        text = F.report_reference_text(summ, args.part)
+    tag = f"{args.part}.{args.source}"
+    with open(out / f"family_survey.{tag}.tsv", "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t")
         w.writeheader()
         w.writerows(rows)
-    summ = summarize(rows)
-    summ["cichlid_homology"], summ["part"] = __version__, args.part
-    (out / f"family_survey.{args.part}.json").write_text(json.dumps(summ, indent=1))
-    text = report_text(summ, args.part)
-    (out / f"family_survey.{args.part}.md").write_text(text)
+    summ["cichlid_homology"], summ["part"], summ["source"] = __version__, args.part, args.source
+    (out / f"family_survey.{tag}.json").write_text(json.dumps(summ, indent=1))
+    text = text or F.report_text(summ, args.part)
+    (out / f"family_survey.{tag}.md").write_text(text)
     print(text)
     print(f"\nwritten to {out}")
     return 0
@@ -270,6 +295,9 @@ def main(argv=None) -> int:
     fs = sub.add_parser("family-survey", help="human, teleost and other genes in every finished family of a method (read-only)")
     fs.add_argument("--part", default="Compara", choices=["TreeFam", "Compara", "OrthoFinder"])
     fs.add_argument("--species", default="Mzeb", help="prefix of the focal species (marks the families that hold one of its genes)")
+    fs.add_argument("--source", default="built", choices=["built", "reference"],
+                    help="built: the finished family folders under Results; reference: the coordinator's prepared reference trees")
+    fs.add_argument("--prepared", default=None, help="with --source reference: the prepared/ folder (default: from the layout)")
     fs.add_argument("--limit", type=int, default=0, help="only the first N families (a quick test)")
     fs.add_argument("--out", default=None, help="default: ~/share/family_survey_<version>_<timestamp>")
     fs.set_defaults(func=_family_survey)

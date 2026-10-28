@@ -65,3 +65,57 @@ def test_an_unreadable_family_is_reported_not_fatal(tmp_path):
     (tmp_path / "F3" / "tree.nwk").unlink()
     rows = run_survey(tmp_path, ["F1", "F3"], LS(), FakeClades(), PREFIXES, "Mzeb", names=NAMES)
     assert rows[1]["tree_mode"].startswith("unreadable") and rows[0]["n_human"] == 1
+
+
+def make_reference(tmp_path):
+    from cichlid_homology.famsurvey import run_reference_survey  # noqa: F401
+    prep = tmp_path / "prepared"
+    (prep / "trees").mkdir(parents=True)
+    trees = {
+        "C1": "((Hsap_1:0.1[&&NHX:S=Homo_sapiens],Mmus_1:0.2),(Locu_1:0.3,(Aang_1:0.1,Drer_1:0.1)));",    # human, mouse, gar, teleosts
+        "C2": "((Hsap_1,Hsap_2),(Mmus_1,Ecal_1));",                                                      # human, no teleost
+        "C3": "(Aang_1,(Drer_1,Trub_1));",                                                               # teleost, no human
+        "C4": "((Hsap_1,Mmus_1),(Aang_1,Drer_1));",                                                      # human and teleosts, not hit by us
+        "C5": "(Bflo_1,Cmil_1);",
+    }
+    for f, nwk in trees.items():
+        (prep / "trees" / f"{f}.nwk").write_text(nwk)
+    (prep / "family_audit.tsv").write_text("family\tn_members\tstatus\nC1\t7\tok\nC2\t4\tok\nC3\t3\ttiny_tree\nC4\t4\tok\nC5\t2\tno_panel_members\nC9\t0\tno_panel_members\n")
+    return prep
+
+
+def test_the_reference_survey_counts_human_and_teleost_genes_and_what_the_project_built(tmp_path):
+    from cichlid_homology.famsurvey import REF_COLS, report_reference_text, run_reference_survey, summarize_reference
+    prep = make_reference(tmp_path)
+    rows, diag = run_reference_survey(prep, LS(), FakeClades(), built={"C1"}, hit={"C1", "C3"}, focal_hit={"C1"}, names=NAMES)
+    assert [r["family"] for r in rows] == ["C1", "C2", "C3", "C4", "C5"] and set(rows[0]) == set(REF_COLS)
+    c1 = rows[0]
+    assert (c1["n_human"], c1["n_mouse"], c1["n_gar_reedfish"], c1["n_teleost_ref_leaves"], c1["n_leaves"]) == (1, 1, 1, 2, 5)   # the NHX comment is ignored
+    assert (c1["audit_status"], c1["built"], c1["hit_by_project"], c1["has_focal_gene"]) == ("ok", 1, 1, 1)
+    assert rows[2]["audit_status"] == "tiny_tree" and rows[3]["built"] == 0 and rows[3]["hit_by_project"] == 0
+    assert diag["tree_files"] == 5 and diag["extensions"] == {".nwk": 5} and diag["families_in_audit_without_a_tree_file"] == 1
+    assert diag["audit_statuses"] == {"ok": 3, "tiny_tree": 1, "no_panel_members": 2}
+    s = summarize_reference(rows, diag)
+    assert s["with_human"] == 3 and s["with_human_and_no_teleost"] == 1 and s["with_human_and_teleost"] == 2
+    ref = s["reference"]
+    assert ref["human_and_teleost"] == {"families": 2, "built": 1, "hit_by_a_project_species": 1, "hit_by_the_focal_species": 1, "not_hit_by_any_project_species": 1}
+    assert ref["human_and_no_teleost"]["families"] == 1 and ref["human_and_no_teleost"]["audit_statuses"] == {"ok": 1}
+    assert ref["teleost_and_no_human"] == {"families": 1, "built": 0}
+    assert "Reference-tree survey" in report_reference_text(s, "Compara")
+
+
+def test_the_audit_columns_are_found_by_name_or_by_position(tmp_path):
+    from cichlid_homology.famsurvey import read_audit
+    (tmp_path / "a.tsv").write_text("family\tstatus\nX\tok\nY\ttiny_tree\n")
+    (tmp_path / "b.tsv").write_text("fam_id\tresult\textra\nX\tok\t1\n")
+    assert read_audit(tmp_path / "a.tsv")[0] == {"X": "ok", "Y": "tiny_tree"}
+    assert read_audit(tmp_path / "b.tsv")[0] == {"X": "ok"} and read_audit(tmp_path / "b.tsv")[1][0] == "fam_id"
+    assert read_audit(tmp_path / "missing.tsv") == ({}, [])
+
+
+def test_an_unreadable_reference_tree_is_counted_not_fatal(tmp_path):
+    from cichlid_homology.famsurvey import run_reference_survey
+    prep = make_reference(tmp_path)
+    (prep / "trees" / "C3.nwk").write_bytes(b"\xff\xfe\x00")
+    rows, diag = run_reference_survey(prep, LS(), FakeClades(), names=NAMES)
+    assert diag["unreadable"] == 1 and rows[2]["tree_mode"].startswith("unreadable") and rows[0]["n_human"] == 1
