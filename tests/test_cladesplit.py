@@ -122,3 +122,13 @@ def test_the_rooting_option_keeps_the_trees_own_root_or_reconciles():
     sp, cl = st(), Clades()
     fam, groups = split_family("F", "(((Hsap_1,Mmus_1),(Aang_1,Drer_1)),(Hsap_2,Mmus_2));", LS(), sp, cl, ParsimonyContext(sp, cl), NAMES, 0.5, False)
     assert fam["rooting"] == "reconciliation"
+
+
+def test_each_clade_lists_its_human_and_zebrafish_protein_ids_so_genes_can_be_joined_to_it():
+    fam, groups = run("(((Hsap_1,Mmus_1),(Aang_1,Drer_1)),((Hsap_2,Mmus_2),(Aang_2,Drer_2)));")
+    by = {g["human_proteins"]: g for g in groups}
+    assert set(by) == {"Hsap_1", "Hsap_2"} and by["Hsap_1"]["zebrafish_proteins"] == "Drer_1" and by["Hsap_2"]["zebrafish_proteins"] == "Drer_2"
+    one = run("((Hsap_1,Hsap_2),(Mmus_1,(Aang_1,Drer_1)));")[1][0]
+    assert one["human_proteins"] == "Hsap_1;Hsap_2" and one["zebrafish_proteins"] == "Drer_1"
+    solo = run("Hsap_1;")[1][0]
+    assert (solo["human_proteins"], solo["zebrafish_proteins"]) == ("Hsap_1", "")

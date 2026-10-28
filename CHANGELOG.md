@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.1 (protein IDs in the clade table)
+- First full run of 0.16.0 on Compara: 15,227 families with a human gene split into 20,121 clades; every multi-member family used its own recorded root
+  (14,942), none needed reconciliation. Clades with exactly one human gene: 16,421 (13,093 from one-human families, 3,328 from split families, as clean
+  as the rest: 69% against 72% with every tetrapod species single-copy). Two-human clades are not clean (64% under half the tetrapod species single-copy).
+- The clade table now lists the human and zebrafish protein IDs of each clade (`human_proteins`, `zebrafish_proteins`) so that an M. zebra gene joins to
+  its clade through its closest human or zebrafish gene. 166 offline tests.
+
 ## 0.16.0 (clades of the reference families, split at their ancient duplications)
 - New read-only command `cichlid-homology clade-split --part Compara`: for every reference family with a human gene (`--all-families` for the rest),
   root the tree (the tree's own root when it has two children, else by reconciliation with the master species tree; `--rooting reconcile` always

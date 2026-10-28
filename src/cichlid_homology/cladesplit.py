@@ -18,6 +18,9 @@ Rooting: with `already_rooted` the tree's own root is kept when it has exactly t
 the tree is rooted by reconciliation with the master species tree, which can put the fish outside a tetrapod duplication when a
 paralog is missing in fish; `rooting` in the family row says which was used.
 
+Each clade row lists the protein IDs of its human and zebrafish genes (`human_proteins`, `zebrafish_proteins`, `;`-joined), so a gene that
+has a closest human or zebrafish gene in the family joins to its clade through that protein.
+
 Scores of a clade: human genes; tetrapod species and genes, the mean genes per tetrapod species, the share of tetrapod species
 with exactly one gene; the same for teleosts, and the share of the family's teleost (and tetrapod) species that are in the clade;
 supported duplications inside it by kind; and from the branch lengths of the tree, root-to-tip distances (from the clade's
@@ -36,7 +39,7 @@ from .rooting import root_tree
 from .tree import leaves, parse_newick, postorder, prune
 from .treedate import _bits, _Tree
 
-GROUP_COLS = ["family", "group", "n_human", "n_genes", "n_species", "n_tetrapod_genes", "n_tetrapod_species", "tetrapod_mean_genes",
+GROUP_COLS = ["family", "group", "n_human", "human_proteins", "zebrafish_proteins", "n_genes", "n_species", "n_tetrapod_genes", "n_tetrapod_species", "tetrapod_mean_genes",
               "tetrapod_single_copy_share", "n_teleost_genes", "n_teleost_species", "teleost_mean_genes", "teleost_species_share_of_family",
               "tetrapod_species_share_of_family", "n_gar_reedfish", "tetrapod_clade_dups", "tetrapod_species_dups", "teleost_clade_dups",
               "mixed_dups", "tetrapod_rtt_median", "tetrapod_rtt_cv", "human_rtt", "human_rel_rate", "lengths_missing"]
@@ -101,7 +104,8 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
     if rt is None:
         sp = root.sp
         row = {c: 0 for c in GROUP_COLS}
-        row.update(family=fid, group="G1", n_genes=1, n_species=1, n_human=int(sp == names["human"]), lengths_missing=0)
+        row.update(family=fid, group="G1", n_genes=1, n_species=1, n_human=int(sp == names["human"]), lengths_missing=0,
+                   human_proteins=root.name if sp == names["human"] else "", zebrafish_proteins=root.name if sp == names["zebrafish"] else "")
         return ({"family": fid, "n_genes": 1, "n_human": row["n_human"], "n_groups": 1, "n_groups_with_human": row["n_human"],
                  "n_ancient_dups": 0, "n_family_tetrapod_species": 0, "n_family_teleost_species": 0, "root_cost": "", "rooting": "single"}, [row])
     T = _Tree(rt, ctx, "denovo", None)
@@ -163,7 +167,10 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
                         kinds["tel_clade" if _bits(m) > 1 else "tel_species"] += 1
                     else:
                         kinds["mixed"] += 1
-        rows.append({"family": fid, "group": f"G{len(rows) + 1}", "n_human": per.get(names["human"], 0), "n_genes": len(lv), "n_species": len(per),
+        rows.append({"family": fid, "group": f"G{len(rows) + 1}", "n_human": per.get(names["human"], 0),
+                     "human_proteins": ";".join(sorted(x.name for x in lv if x.sp == names["human"])),
+                     "zebrafish_proteins": ";".join(sorted(x.name for x in lv if x.sp == names["zebrafish"])),
+                     "n_genes": len(lv), "n_species": len(per),
                      "n_tetrapod_genes": n_tet, "n_tetrapod_species": len(tet_sp),
                      "tetrapod_mean_genes": round(n_tet / len(tet_sp), 3) if tet_sp else "",
                      "tetrapod_single_copy_share": round(sum(1 for s in tet_sp if per[s] == 1) / len(tet_sp), 3) if tet_sp else "",
