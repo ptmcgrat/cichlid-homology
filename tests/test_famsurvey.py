@@ -93,7 +93,8 @@ def test_the_reference_survey_counts_human_and_teleost_genes_and_what_the_projec
     assert (c1["n_human"], c1["n_mouse"], c1["n_gar_reedfish"], c1["n_teleost_ref_leaves"], c1["n_leaves"]) == (1, 1, 1, 2, 5)   # the NHX comment is ignored
     assert (c1["audit_status"], c1["built"], c1["hit_by_project"], c1["has_focal_gene"]) == ("ok", 1, 1, 1)
     assert rows[2]["audit_status"] == "tiny_tree" and rows[3]["built"] == 0 and rows[3]["hit_by_project"] == 0
-    assert diag["tree_files"] == 5 and diag["extensions"] == {".nwk": 5} and diag["families_in_audit_without_a_tree_file"] == 1
+    assert diag["families_with_files"] == 5 and diag["files_by_extension"] == {".nwk": 5} and diag["families_with_a_tree_file"] == 5
+    assert diag["audited_families_without_a_file"] == 1 and rows[0]["leaf_source"] == "tree" and diag["families_with_no_leaves"] == 0
     assert diag["audit_statuses"] == {"ok": 3, "tiny_tree": 1, "no_panel_members": 2}
     s = summarize_reference(rows, diag)
     assert s["with_human"] == 3 and s["with_human_and_no_teleost"] == 1 and s["with_human_and_teleost"] == 2
@@ -113,9 +114,31 @@ def test_the_audit_columns_are_found_by_name_or_by_position(tmp_path):
     assert read_audit(tmp_path / "missing.tsv") == ({}, [])
 
 
-def test_an_unreadable_reference_tree_is_counted_not_fatal(tmp_path):
+def test_a_garbled_reference_tree_is_counted_as_a_family_with_no_leaves_not_fatal(tmp_path):
     from cichlid_homology.famsurvey import run_reference_survey
     prep = make_reference(tmp_path)
     (prep / "trees" / "C3.nwk").write_bytes(b"\xff\xfe\x00")
     rows, diag = run_reference_survey(prep, LS(), FakeClades(), names=NAMES)
-    assert diag["unreadable"] == 1 and rows[2]["tree_mode"].startswith("unreadable") and rows[0]["n_human"] == 1
+    assert diag["families_with_no_leaves"] == 1 and rows[2]["n_leaves"] == 0 and rows[0]["n_human"] == 1       # garbled text has no leaves
+
+
+def test_a_family_with_only_an_alignment_is_read_from_its_sequence_names_and_a_tree_wins_when_both_exist(tmp_path):
+    from cichlid_homology.famsurvey import alignment_names, reference_files, run_reference_survey
+    prep = tmp_path / "prepared"
+    (prep / "trees").mkdir(parents=True)
+    (prep / "trees" / "A1.aln").write_text(">Hsap_1/1-300\nMKV--\n>Hsap_2/1-290 extra\nMKV--\n>Aang_1/5-310\nMKVAA\n>Drer_1\nMKVAA\n")
+    (prep / "trees" / "A2.aln").write_text(">Hsap_1\nMK\n>Mmus_1\nMK\n")
+    (prep / "trees" / "A2.nhx").write_text("(Hsap_1,(Mmus_1,Drer_1));")           # the tree has a leaf the alignment lacks: the tree wins
+    (prep / "trees" / "A3.sto").write_text("# STOCKHOLM 1.0\nAang_1/1-9 MKV\nDrer_1/1-9 MKV\n#=GC RF xxx\n//\n")
+    (prep / "trees" / "notes.txt").write_text("not a family file")
+    by, ext = reference_files(prep / "trees")
+    assert set(by) == {"A1", "A2", "A3", "notes"} and ext == {".aln": 2, ".nhx": 1, ".sto": 1, ".txt": 1}
+    assert alignment_names(prep / "trees" / "A1.aln") == ["Hsap_1", "Hsap_2", "Aang_1", "Drer_1"]
+    assert alignment_names(prep / "trees" / "A3.sto") == ["Aang_1", "Drer_1"]
+    rows, diag = run_reference_survey(prep, LS(), FakeClades(), names=NAMES)
+    r = {x["family"]: x for x in rows}
+    assert (r["A1"]["n_human"], r["A1"]["n_teleost_ref_leaves"], r["A1"]["leaf_source"]) == (2, 2, "alignment")
+    assert (r["A2"]["n_leaves"], r["A2"]["n_teleost_ref_leaves"], r["A2"]["leaf_source"]) == (3, 1, "tree")
+    assert r["A3"]["leaf_source"] == "alignment" and r["A3"]["n_human"] == 0
+    assert diag["families_with_a_tree_file"] == 1 and diag["families_with_an_alignment_only"] == 2
+    assert r["notes"]["leaf_source"] == "none" and diag["unreadable"] == 1

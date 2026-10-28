@@ -35,6 +35,10 @@ def survey_family(folder, ls, clades, prefixes, focal_prefix="Mzeb", names=NAMES
 
 def survey_tree(name, nwk, mode, ls, clades, prefixes, focal_prefix="Mzeb", names=NAMES) -> dict:
     leaves = leaf_names(re.sub(r"\[[^\]]*\]", "", nwk))            # NHX or other bracketed comments are dropped
+    return survey_leaves(name, leaves, mode, ls, clades, prefixes, focal_prefix, names)
+
+
+def survey_leaves(name, leaves, mode, ls, clades, prefixes, focal_prefix="Mzeb", names=NAMES) -> dict:
     row = {c: 0 for c in COLS}
     row.update(family=name, tree_mode=mode, n_leaves=len(leaves), has_focal_gene=0)
     species, tel = set(), set()
@@ -175,17 +179,47 @@ def finished_families(root) -> list:
     return sorted(p.name for p in root.iterdir() if p.is_dir() and (p / "done.json").exists() and (p / "tree.nwk").exists())
 
 
-REF_EXTRA = ["audit_status", "built", "hit_by_project"]
+REF_EXTRA = ["audit_status", "built", "hit_by_project", "leaf_source"]
 REF_COLS = COLS + REF_EXTRA
+TREE_EXT = {".nhx", ".nwk", ".newick", ".tree", ".tre"}
+ALN_EXT = {".aln", ".fa", ".fasta", ".afa", ".sto", ".stk"}
 
 
-def tree_files(trees_dir) -> dict:
-    """{family id: path} for the regular files of a folder of reference trees; the id is the name up to the first dot."""
-    out = {}
+def reference_files(trees_dir):
+    """({family id: {"tree": path, "aln": path}}, Counter of every file extension). The id is the name up to the first dot."""
+    by, ext = {}, collections.Counter()
     for p in sorted(Path(trees_dir).iterdir()):
-        if p.is_file():
-            out.setdefault(p.name.split(".")[0], p)
-    return out
+        if not p.is_file():
+            continue
+        e = p.suffix.lower()
+        ext[e or "(none)"] += 1
+        d = by.setdefault(p.name.split(".")[0], {})
+        if e in TREE_EXT:
+            d["tree"] = p
+        elif e in ALN_EXT:
+            d["aln"] = p
+    return by, ext
+
+
+_RANGE = re.compile(r"/\d+-\d+$")
+
+
+def alignment_names(path) -> list:
+    """Sequence names of an alignment: FASTA headers, or the first column of Stockholm lines; a trailing /start-end is removed."""
+    text = Path(path).read_text(errors="replace")
+    out, seen = [], set()
+    if text.lstrip().startswith("# STOCKHOLM"):
+        for line in text.splitlines():
+            if line and not line.startswith(("#", "//")):
+                n = _RANGE.sub("", line.split()[0])
+                if n not in seen:
+                    seen.add(n)
+                    out.append(n)
+        return out
+    for line in text.splitlines():
+        if line.startswith(">"):
+            out.append(_RANGE.sub("", line[1:].split()[0]) if line[1:].strip() else "")
+    return [n for n in out if n]
 
 
 def read_audit(path):
@@ -203,29 +237,43 @@ def read_audit(path):
 
 def run_reference_survey(prepared, ls, clades, built=(), hit=(), focal_hit=(), audit=None, progress=None,
                          names=NAMES, limit=0) -> tuple:
-    """Survey the coordinator's prepared reference trees. `built`: the families with a result folder; `hit`: the families any
-    project species was assigned to; `focal_hit`: those the focal species was assigned to. Returns (rows, diagnostics)."""
+    """Survey the coordinator's prepared reference families: the tree when there is one, else the names in the alignment.
+    `built`: the families with a result folder; `hit`: the families any project species was assigned to; `focal_hit`: those the
+    focal species was assigned to. Returns (rows, diagnostics)."""
     prepared = Path(prepared)
-    files = tree_files(prepared / "trees")
+    files, ext = reference_files(prepared / "trees")
     ids = sorted(files)[:limit] if limit else sorted(files)
     audit = audit if audit is not None else read_audit(prepared / "family_audit.tsv")[0]
     built, hit, focal_hit = set(built), set(hit), set(focal_hit)
-    rows, ext = [], collections.Counter(p.suffix or "(none)" for p in files.values())
+    rows = []
     for i, fid in enumerate(ids, 1):
+        f = files[fid]
         try:
-            r = survey_tree(fid, files[fid].read_text(), "reference", ls, clades, set(), "", names)
+            if "tree" in f:
+                r = survey_tree(fid, f["tree"].read_text(errors="replace"), "reference", ls, clades, set(), "", names)
+                src = "tree"
+            elif "aln" in f:
+                r = survey_leaves(fid, alignment_names(f["aln"]), "reference", ls, clades, set(), "", names)
+                src = "alignment"
+            else:
+                raise ValueError("no tree or alignment file")
         except Exception as e:
-            r = {**{c: 0 for c in COLS}, "family": fid, "tree_mode": f"unreadable:{type(e).__name__}"}
+            r, src = {**{c: 0 for c in COLS}, "family": fid, "tree_mode": f"unreadable:{type(e).__name__}"}, "none"
         r.update(audit_status=audit.get(fid, "not_in_audit"), built=int(fid in built), hit_by_project=int(fid in hit),
-                 has_focal_gene=int(fid in focal_hit))
+                 has_focal_gene=int(fid in focal_hit), leaf_source=src)
         rows.append(r)
         if progress and i % 5000 == 0:
             progress(i, len(ids))
-    diag = {"tree_files": len(files), "extensions": dict(ext), "first_files": [p.name for p in list(files.values())[:3]],
+    diag = {"families_with_files": len(files), "files_by_extension": dict(ext),
+            "families_with_a_tree_file": sum(1 for f in files.values() if "tree" in f),
+            "families_with_an_alignment_only": sum(1 for f in files.values() if "tree" not in f and "aln" in f),
+            "first_files": [str(p.name) for f in list(files.values())[:3] for p in f.values()],
             "audit_rows": len(audit), "audit_statuses": dict(collections.Counter(audit.values())),
-            "families_in_audit_without_a_tree_file": sum(1 for f in audit if f not in files),
+            "audited_families_without_a_file": sum(1 for f in audit if f not in files),
             "unknown_leaves_total": sum(r["n_unknown_leaves"] for r in rows),
-            "unreadable": sum(1 for r in rows if str(r["tree_mode"]).startswith("unreadable"))}
+            "leaves_total": sum(r["n_leaves"] for r in rows),
+            "unreadable": sum(1 for r in rows if str(r["tree_mode"]).startswith("unreadable")),
+            "families_with_no_leaves": sum(1 for r in rows if r["n_leaves"] == 0 and not str(r["tree_mode"]).startswith("unreadable"))}
     return rows, diag
 
 
@@ -255,9 +303,10 @@ def summarize_reference(rows, diag) -> dict:
 def report_reference_text(s: dict, part: str) -> str:
     d, ref = s["diagnostics"], s["reference"]
     L = [f"# Reference-tree survey: {part} (the coordinator's prepared input)", "",
-         f"{s['families']} reference trees read ({d['tree_files']} files; extensions {d['extensions']}; first files {d['first_files']}). "
-         f"family_audit.tsv: {d['audit_rows']} rows, statuses {d['audit_statuses']}; {d['families_in_audit_without_a_tree_file']} audited families "
-         f"have no tree file. Leaves with no species: {d['unknown_leaves_total']}; unreadable trees: {d['unreadable']}.", "",
+         f"{s['families']} reference families read; files by extension {d['files_by_extension']}; {d['families_with_a_tree_file']} families have a tree "
+         f"file and {d['families_with_an_alignment_only']} an alignment only (first files {d['first_files']}). family_audit.tsv: {d['audit_rows']} rows, "
+         f"statuses {d['audit_statuses']}; {d['audited_families_without_a_file']} audited families have no file. Leaves read: {d['leaves_total']}, "
+         f"with no species: {d['unknown_leaves_total']}; families with no leaves: {d['families_with_no_leaves']}; unreadable: {d['unreadable']}.", "",
          "## Human genes per reference family", ""]
     h = s["human_genes_per_family_histogram"]
     mx = max(h.values()) or 1

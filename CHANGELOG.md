@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.2 (reference survey: alignments as well as trees)
+- First run of 0.14.1 on the real input: `prepared/trees/` holds alignments (`.aln`, 41,193 families), not only trees; reading them as
+  Newick gave zero leaves and every count was zero. The audit file was read correctly: 54,308 families (`ok` 23,864, `tiny_tree` 16,996,
+  `no_panel_members` 13,115, `cichlid_only` 333); the 13,115 `no_panel_members` have no file.
+- The reference reader now keeps every file of a family and uses the tree when there is one, otherwise the sequence names of the alignment
+  (FASTA headers or Stockholm lines, a trailing `/start-end` removed). New columns `leaf_source` (tree, alignment, none) and, in the
+  report, files by extension, families with a tree file, families with an alignment only, families with no leaves. 150 offline tests.
+
 ## 0.14.1 (family survey of the coordinator's prepared reference trees)
 - `cichlid-homology family-survey --part Compara --source reference [--prepared PATH]` reads the coordinator's prepared Compara116 trees
   (`Inputs/Families/Compara116/prepared/trees/`), counts human, mouse, zebrafish, gar and reedfish genes, reference teleost genes and species,
