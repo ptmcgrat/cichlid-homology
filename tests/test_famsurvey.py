@@ -114,12 +114,12 @@ def test_the_audit_columns_are_found_by_name_or_by_position(tmp_path):
     assert read_audit(tmp_path / "missing.tsv") == ({}, [])
 
 
-def test_a_garbled_reference_tree_is_counted_as_a_family_with_no_leaves_not_fatal(tmp_path):
+def test_a_garbled_reference_tree_is_flagged_as_an_unknown_leaf_not_fatal(tmp_path):
     from cichlid_homology.famsurvey import run_reference_survey
     prep = make_reference(tmp_path)
     (prep / "trees" / "C3.nwk").write_bytes(b"\xff\xfe\x00")
     rows, diag = run_reference_survey(prep, LS(), FakeClades(), names=NAMES)
-    assert diag["families_with_no_leaves"] == 1 and rows[2]["n_leaves"] == 0 and rows[0]["n_human"] == 1       # garbled text has no leaves
+    assert diag["unknown_leaves_total"] == 1 and rows[2]["n_unknown_leaves"] == 1 and rows[0]["n_human"] == 1   # a bare token is a one-member family with no known species
 
 
 def test_a_family_with_only_an_alignment_is_read_from_its_sequence_names_and_a_tree_wins_when_both_exist(tmp_path):
@@ -142,3 +142,73 @@ def test_a_family_with_only_an_alignment_is_read_from_its_sequence_names_and_a_t
     assert r["A3"]["leaf_source"] == "alignment" and r["A3"]["n_human"] == 0
     assert diag["families_with_a_tree_file"] == 1 and diag["families_with_an_alignment_only"] == 2
     assert r["notes"]["leaf_source"] == "none" and diag["unreadable"] == 1
+
+
+def test_a_one_member_family_is_a_bare_name_and_an_empty_tree_falls_back_to_the_alignment(tmp_path):
+    from cichlid_homology.famsurvey import run_reference_survey, survey_tree
+    one = survey_tree("X", "Hsap_1;", "reference", LS(), FakeClades(), set(), "", NAMES)
+    assert (one["n_leaves"], one["n_human"]) == (1, 1)
+    assert survey_tree("X", "Hsap_1:0.0[&&NHX:S=Homo_sapiens];", "reference", LS(), FakeClades(), set(), "", NAMES)["n_human"] == 1
+    prep = tmp_path / "prepared"
+    (prep / "trees").mkdir(parents=True)
+    (prep / "trees" / "B1.nhx").write_text("")                       # an empty tree
+    (prep / "trees" / "B1.aln").write_text(">Hsap_1/1-9\nMKV\n>Mmus_1/1-9\nMKV\n")
+    (prep / "trees" / "B2.nhx").write_text("Hsap_1;")
+    rows, diag = run_reference_survey(prep, LS(), FakeClades(), names=NAMES)
+    r = {x["family"]: x for x in rows}
+    assert (r["B1"]["n_human"], r["B1"]["n_mouse"], r["B1"]["leaf_source"]) == (1, 1, "alignment_because_tree_empty")
+    assert (r["B2"]["n_human"], r["B2"]["leaf_source"]) == (1, "tree")
+    assert diag["families_read_from_the_alignment_because_the_tree_was_empty"] == 1 and diag["families_with_no_leaves"] == 0
+
+
+def test_the_report_describes_the_families_with_human_and_teleost_genes_that_nothing_of_ours_hit(tmp_path):
+    from cichlid_homology.famsurvey import report_reference_text, run_reference_survey, summarize_reference
+    prep = make_reference(tmp_path)
+    rows, diag = run_reference_survey(prep, LS(), FakeClades(), built={"C1"}, hit={"C1"}, focal_hit={"C1"}, names=NAMES)
+    s = summarize_reference(rows, diag)
+    nh = s["reference"]["human_and_teleost_not_hit_details"]
+    assert nh["families"] == 1 and nh["audit_statuses"] == {"ok": 1} and nh["with_exactly_one_human_gene"] == 1
+    assert "no project species was assigned to" in report_reference_text(s, "Compara")
+
+
+class TetraClades(FakeClades):
+    """The helper's clade table, with the tetrapods marked as sarcopterygians and ecal standing in for the coelacanth."""
+    def lineage(self, s):
+        return "sarcopterygian" if s in ("homo_sapiens", "mmus", "ecal") else None
+
+
+NAMES_C = {**NAMES, "coelacanth": "ecal"}
+
+
+def test_mean_genes_per_species_for_tetrapods_and_teleosts_by_number_of_human_genes():
+    from cichlid_homology.famsurvey import copies_per_species, survey_tree
+    fams = {
+        "T1": "((Hsap_1,Mmus_1),(Mmus_2,(Ecal_1,(Aang_1,(Drer_1,Drer_2)))));",      # 1 human; tetrapods 3 genes / 2 species; teleosts 3 / 2
+        "T2": "((Hsap_1,Hsap_2),(Mmus_1,(Aang_1,Drer_1)));",                        # 2 human; tetrapods 3 / 2; teleosts 2 / 2
+        "T3": "(Hsap_1,Mmus_1);",                                                   # 1 human, no teleost: tetrapods 2 / 2
+        "T4": "((Hsap_1,Mmus_1),(Aang_1,Aang_2,Aang_3));",                          # 1 human; teleosts 3 / 1
+        "T5": "(Aang_1,Drer_1);",                                                   # no human: not counted
+    }
+    rows = [survey_tree(f, nwk, "reference", LS(), TetraClades(), set(), "", NAMES_C) for f, nwk in fams.items()]
+    r = {x["family"]: x for x in rows}
+    assert (r["T1"]["n_tetrapod_leaves"], r["T1"]["n_tetrapod_species"], r["T1"]["n_sarcopterygian_leaves"]) == (3, 2, 4)   # the coelacanth is not a tetrapod
+    assert (r["T1"]["n_teleost_ref_leaves"], r["T1"]["n_teleost_ref_species"]) == (3, 2)
+    c = copies_per_species(rows)
+    assert c["1"]["families"] == 3 and c["2"]["families"] == 1
+    tet1, tel1 = c["1"]["tetrapod"], c["1"]["teleost"]
+    assert tet1["families_with_species"] == 3 and tet1["bins"]["1 (one gene per species)"] == 2 and tet1["bins"]["1.25 to 1.5"] == 1   # T3, T4: 1.0; T1: 1.5
+    assert tel1["families_with_species"] == 2 and tel1["families_with_none"] == 1                                                      # T3 has no teleost
+    assert tel1["bins"]["1.25 to 1.5"] == 1 and tel1["bins"]["2 to 3"] == 1                  # T1: 3 / 2 = 1.5; T4: 3 / 1 = 3
+    assert c["2"]["teleost"]["bins"]["1 (one gene per species)"] == 1 and c["2"]["tetrapod"]["bins"]["1.25 to 1.5"] == 1
+    assert c["1"]["tetrapod"]["quantiles"]["min"] == 1.0 and c["1"]["tetrapod"]["quantiles"]["max"] == 1.5
+
+
+def test_the_reports_show_the_mean_genes_per_species_tables(tmp_path):
+    from cichlid_homology.famsurvey import report_reference_text, report_text, run_reference_survey, run_survey, summarize, summarize_reference
+    make(tmp_path)
+    rows = run_survey(tmp_path, finished_families(tmp_path), LS(), TetraClades(), PREFIXES, "Mzeb", names=NAMES_C)
+    t = report_text(summarize(rows), "Compara")
+    assert "Mean number of genes per species" in t and "Families with 1 human gene" in t and "Families with 2 human genes" in t
+    prep = make_reference(tmp_path / "ref")
+    rrows, diag = run_reference_survey(prep, LS(), TetraClades(), names=NAMES_C)
+    assert "no species of the group in the family" in report_reference_text(summarize_reference(rrows, diag), "Compara")

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.15.0 (mean genes per species, by number of human genes)
+- The family survey now counts tetrapod leaves and species (`n_tetrapod_leaves`, `n_tetrapod_species`: the sarcopterygians without the
+  coelacanth) and reports, for families with exactly 1 and exactly 2 human genes, the distribution of the mean number of genes per species
+  among the tetrapod species present and among the reference teleost species present (genes / species per family): bins (1, 1 to 1.25,
+  1.25 to 1.5, 1.5 to 2, 2 to 3, 3 to 5, over 5), quartiles, the mean of the means, the median number of species present and the families
+  with no species of the group. Both sources (`--source built` and `--source reference`). 155 offline tests.
+
+## 0.14.3 (one-member families in the reference survey)
+- Full run of 0.14.2 on the coordinator's Compara116 input: 41,193 families (40,860 with a tree, 333 alignment only), 1,207,777 leaves, none
+  without a species. 7,715 families came back with no leaves: a one-member family has a tree with no parentheses (`Hsap_1;`) that the leaf
+  parser could not see, so single human genes were counted as zero. Now a bare name is read as a one-member tree, and a family whose tree
+  yields nothing is read from its alignment (`leaf_source` `alignment_because_tree_empty`).
+- The report describes the families with human and teleost genes that no project species was assigned to: audit statuses, median leaves and
+  teleost species, those with one or two teleost species, those with exactly one human gene, those with gar or reedfish. 153 offline tests.
+
 ## 0.14.2 (reference survey: alignments as well as trees)
 - First run of 0.14.1 on the real input: `prepared/trees/` holds alignments (`.aln`, 41,193 families), not only trees; reading them as
   Newick gave zero leaves and every count was zero. The audit file was read correctly: 54,308 families (`ok` 23,864, `tiny_tree` 16,996,
