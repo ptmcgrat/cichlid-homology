@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.0 (family survey: human genes and teleosts in every family)
+- New read-only command `cichlid-homology family-survey --part Compara`: for every finished family of a method it counts human, mouse,
+  zebrafish, gar and reedfish genes, reference teleost genes and species, other jawed vertebrates, tetrapod leaves, unknown leaves, and our
+  own placed genes, and writes `family_survey.<part>.tsv` (one row per family), a JSON summary and a short report: the histogram of human
+  genes per family, and how many families hold human genes and no teleosts (reference teleost leaves only: a placed M. zebra gene in a
+  tetrapod tree does not count as a teleost). `--limit N` for a quick test, `--species` marks the families that hold a focal-species gene.
+- Why: the ohnolog analysis is simplest where the human protein is a single gene with clear mammalian orthologs. Compara splits a family
+  into a fish tree and a tetrapod tree, so many families hold human genes and no teleosts and are never reached from the M. zebra gene table.
+  This is the first of the measures for the human-side criterion (docs/decisions.md). 147 offline tests.
+
 ## 0.13.0 (categories and confidence from the votes of three calls)
 - Run of 0.12.0 on Compara: the tree alone finds 82.4% of the 2,637 published-pair positives at 0.5% of the 8,192 negatives
   (thresholds 84.0% / 0.8%; thresholds or tree 91.0% / 0.9%). The genes called pairs look like pairs (85% on different sequences,

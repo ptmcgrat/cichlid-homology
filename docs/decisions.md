@@ -140,3 +140,18 @@ large clades (expanded families), and whether to tell the coordinator that the s
   thresholds 173): it misses pairs whose lineages share no species (a disjoint root: 12.5% of the positives), where only
   counts see them.
 - Expected on the next run: the same categories as the preview above; a fourth voice (OrthoFinder) would be a second tree.
+
+
+## 0.14.0: the human side of the ohnolog analysis (owner criterion, stated explicitly)
+- The owner is interested in human proteins that evolve slowly: a clear one-to-one relationship with the human protein and most mammalian
+  proteins makes the fish relationship simpler to read; a human protein with many paralogs and signs of rapid evolution (topology, branch
+  lengths) makes ohnologs less sensible to explore. Used as a flag and measures, not a removal.
+- First look (Compara and TreeFam gene tables, proxies only): genes with one human gene in both methods, the same closest gene and a
+  clade of 150 leaves or fewer are 70% of scored genes; all three B1 calls agree for 77% of them against 48% of the rest, disputed 4.4%
+  against 7.2%, known pairs found 93.5% against 79.4%. Clade size is not a safe measure: it is made larger by the retained ohnologs
+  being studied (a 60-leaf cut kept almost no pairs), so the measures must come from the human and tetrapod side only.
+- Planned measures: human genes in the whole family and in the human protein's tetrapod clade; the share of mammals with exactly one
+  gene in it (mammals from the master species tree); the human lineage's branch length against other mammals, chicken and frog, and
+  the spread of root-to-tip distances among mammals; agreement of the methods on the closest human gene. Sequence identity would need
+  the alignments (computing on residues is not ours); ask project 4 or the coordinator.
+- Cutoffs to be chosen from the data (which cut best predicts agreement and accuracy) or biologically, the owner's choice.

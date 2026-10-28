@@ -106,6 +106,43 @@ def _survey2(args) -> int:
     return 0
 
 
+def _family_survey(args) -> int:
+    """Count human, teleost and other genes in every finished family of a method (read-only)."""
+    import csv
+
+    from cichlid_data import Catalog, get_layout
+    from cichlid_data.clades import Clades
+
+    from .famsurvey import COLS, finished_families, report_text, run_survey, summarize
+    from .species import load_leaf_species
+
+    layout = get_layout()
+    prefixes = {s.prefix for s in Catalog.load(layout).species(release="v1")}
+    res = layout.results("v1", args.part)
+    root = res.family("X").local.parent
+    fams = finished_families(root)
+    if args.limit:
+        fams = fams[: args.limit]
+    print(f"{args.part}: {len(fams)} finished families under {root}; loading the leaf-to-species table ...", flush=True)
+    ls = load_leaf_species(layout, args.part)
+    rows = run_survey(root, fams, ls, Clades.load(), prefixes, args.species,
+                      progress=lambda i, n: print(f"  {i}/{n}", flush=True))
+    out = Path(args.out).expanduser() if args.out else default_out("family_survey")
+    out.mkdir(parents=True, exist_ok=True)
+    with open(out / f"family_survey.{args.part}.tsv", "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=COLS, delimiter="\t")
+        w.writeheader()
+        w.writerows(rows)
+    summ = summarize(rows)
+    summ["cichlid_homology"], summ["part"] = __version__, args.part
+    (out / f"family_survey.{args.part}.json").write_text(json.dumps(summ, indent=1))
+    text = report_text(summ, args.part)
+    (out / f"family_survey.{args.part}.md").write_text(text)
+    print(text)
+    print(f"\nwritten to {out}")
+    return 0
+
+
 def _pilot(args) -> int:
     from cichlid_data import Catalog, get_layout
     from cichlid_data.clades import Clades
@@ -230,6 +267,12 @@ def main(argv=None) -> int:
     s2.add_argument("--n-denovo", type=int, default=100)
     s2.add_argument("--out", default=None)
     s2.set_defaults(func=_survey2)
+    fs = sub.add_parser("family-survey", help="human, teleost and other genes in every finished family of a method (read-only)")
+    fs.add_argument("--part", default="Compara", choices=["TreeFam", "Compara", "OrthoFinder"])
+    fs.add_argument("--species", default="Mzeb", help="prefix of the focal species (marks the families that hold one of its genes)")
+    fs.add_argument("--limit", type=int, default=0, help="only the first N families (a quick test)")
+    fs.add_argument("--out", default=None, help="default: ~/share/family_survey_<version>_<timestamp>")
+    fs.set_defaults(func=_family_survey)
     p = sub.add_parser("pilot", help="rooting, relationships, dating, TreeFam vs Compara (writes scratch files)")
     p.add_argument("--species", default="Mzeb", help="one prefix, or several separated by commas (Mzeb,Acal)")
     p.add_argument("--n", type=int, default=600, help="genes sampled (the same in both methods)")

@@ -34,7 +34,7 @@ the tables behind it to `~/share/pilot_<version>_<timestamp>`.
 
 The report has a section on lost duplicates and retained ohnologs scored by parsimony on the species tree.
 
-## Status
+## Family survey\n\n`cichlid-homology family-survey --part Compara` counts human genes and teleosts in every finished family (read-only).\n\n## Status
 
 0.2.x: pilot code (rooting, relationships, dating, method comparison), tested offline, not yet run on
 real data. The call-table schema is a draft (`docs/call_table_schema.md`); nothing is written to
