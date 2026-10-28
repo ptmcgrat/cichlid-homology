@@ -131,3 +131,12 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - To check on the next run: how many genes are now `pair` and whether they look like pairs (different sequences, published
   pairs), how many `later_duplicate_before_cichlids` remain and whether they look like local duplicates (tandem copies, no
   published pair), and the `shared_early` / `early_within` split.
+
+
+## 0.13.0: confidence by agreement of three calls
+- Owner decision: tiers from the votes of thresholds, parsimony and the tree; core all three agree, probable two of three, no
+  majority is Disputed; the published pairs are an outside check, not part of the calls.
+- The tree is the call most often outvoted when exactly two agree (1,191 of 1,963 on Compara, against parsimony 599 and
+  thresholds 173): it misses pairs whose lineages share no species (a disjoint root: 12.5% of the positives), where only
+  counts see them.
+- Expected on the next run: the same categories as the preview above; a fourth voice (OrthoFinder) would be a second tree.

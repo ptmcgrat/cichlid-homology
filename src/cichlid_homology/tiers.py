@@ -1,36 +1,30 @@
-"""Confidence tiers for goal B1: for each gene, which of the histories it fits and how sure we are.
+"""Categories and confidence for goal B1, from the votes of three calls (0.13.0).
 
-Two independent-looking calls are combined, both read from the same clade copy numbers: the share-based call
-(`b_label`, thresholds 0.5 and 0.3) and the parsimony call (`p_label`, gain 2 loss 1; calibrated against published
-pairs in 0.9.1: the thresholds gave 84% recall at 0.8% false positives, parsimony 82% at 5.8%, and requiring both
-gave 79% at 0.7%). Rows follow the seven histories of docs/NOTES.md:
+Three calls read the same clade of the same family in different ways:
+  thresholds  the share of non-cichlid teleosts with two or more copies (`b_label`; cutoffs 0.5 and 0.3)
+  parsimony   copy-number changes on the species tree (`p_label`; a gain costs 2, a loss 1)
+  tree        the gene tree reconciled with the species tree: the deepest duplication with half-shared species (`d_call`)
+Each votes `pair` (the teleost ancestor kept both copies of the teleost-genome duplication), `lost` (one copy) or abstains.
+On Compara, scored against 2,637 genes in published teleost-duplication pairs and 8,192 genes with no evidence of one:
+3 of 3 votes for a pair held 1,877 positives and 34 negatives, 2 of 3 held 365 and 27, 1 of 3 held 203 and 427, none 192
+and 7,704. The published pairs are no longer part of the calls: they stay in the table as an outside check
+(`t_pairs_*`).
 
-    R1  a duplicate lost early                    R2  both copies kept (zebrafish has both)
-    R3  both kept, zebrafish lost one             R2/3/4  a pair whose depth the counts cannot fix (rows 3 and 4 give
-    R5  a later duplicate in cichlids                      identical counts; rows 6 and 7 cannot be told from them)
-
-Tiers: `core` (both calls agree); `probable` (exactly one calls a pair and the gene is in a published pair, which is
-independent evidence); `possible` (exactly one calls a pair and either the copies are on different sequences, which is weak
-evidence: among genes that are not pairs, 45 to 58% of those with two copies are also on different sequences, or the
-gene tree shows a pair, `d_call` = pair: two lineages at the teleost level sharing half their species, which on the genes
-where the counts disagree was in a published pair 2.5 times as often as for genes with no evidence);
-`disputed` (the calls conflict and nothing settles it, or the copies are tandem); `unclassified` (not scored, expanded
-family, or many copies; a many-copy gene whose gene tree shows a pair at the teleost root is a pair, `possible`, or
-`probable` with a published pair: on Compara such genes were in a published pair 39% of the time against 9% for many-copy
-genes with no shared species). No share cutoffs are added here.
-
-The simplified category (`t_category`) groups these: Lost duplicate; Both copies kept (best guess) (R2, R3, probable and
-possible, with the confidence in `t_tier`); Later duplicate, in cichlids (R5); Later duplicate, before cichlids (a
-duplication after the teleost root but before the cichlids, not an ohnolog); Disputed; Unclassified (one group, the
-reason in `t_call`). A later duplicate before the cichlids needs parsimony to place a clade-level gain at the
-teleost, percomorph or ovalentarian level, the gene to have two or more copies that are tandem, and no published
-pair: counts alone cannot tell such a duplicate from a teleost-duplication pair kept in the percomorphs, so the
-rule is strict and the group is small. `t_when` gives the level of the gain."""
+Categories (`t_category`): Lost duplicate; Both copies kept (best guess) (R2, R3 and R4 of docs/NOTES.md cannot be told
+apart by counts); Later duplicate, in cichlids; Later duplicate, before cichlids (after the teleost root, before the
+cichlids: not an ohnolog); Disputed (no majority); Unclassified (one group, the reason in `t_call`).
+Confidence (`t_tier`): `core` = all three calls agree (for later duplicates in cichlids, the two count calls agree);
+`probable` = two of the three agree; `possible` = a later duplicate before the cichlids on one line of evidence, or a pair in
+a many-copy family on the tree alone; `disputed` = no majority; `unclassified`.
+A later duplicate before the cichlids needs parsimony or the tree to place a clade-level duplication at the teleost,
+percomorph or ovalentarian level, two or more M. zebra copies that are tandem, and no published pair (an ohnolog): counts
+alone cannot tell such a duplicate from a teleost pair kept in the percomorphs, so the rule is strict and the group is small."""
 from __future__ import annotations
 
 from collections import Counter
 
-TIER_COLS = ["t_category", "t_row", "t_call", "t_tier", "t_basis", "t_positions", "t_when"]
+TIER_COLS = ["t_category", "t_row", "t_call", "t_tier", "t_basis", "t_vote_thr", "t_vote_par", "t_vote_tree",
+             "t_positions", "t_when"]
 CATEGORIES = ("Lost duplicate", "Both copies kept (best guess)", "Later duplicate, in cichlids",
               "Later duplicate, before cichlids", "Disputed", "Unclassified")
 CATEGORY_OF = {"lost_duplicate": CATEGORIES[0], "retained_pair": CATEGORIES[1], "cichlid_specific_duplicate": CATEGORIES[2],
@@ -39,6 +33,14 @@ LADDER = ("teleost", "percomorph", "ovalentaria")
 CLADE_LEVELS = ("teleost", "percomorph", "ovalentaria", "cichlid")
 TIERS = ("core", "probable", "possible", "disputed", "unclassified")
 PAIR_THR = ("retained_pair", "cichlid_lost_one_copy")      # the teleost ancestor kept both copies
+LOST_THR = ("single", "cichlid_specific_duplication")      # one copy at the teleost ancestor
+
+
+def _n(v) -> int:
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _later_levels(row) -> set:
@@ -60,18 +62,16 @@ def _positions(row) -> str:
     return ""
 
 
-def _n(v) -> int:
-    try:
-        return int(v)
-    except (TypeError, ValueError):
-        return 0
+def votes(row) -> tuple:
+    thr = row.get("b_label_raw") or row.get("b_label") or ""
+    v_thr = "pair" if thr in PAIR_THR else ("lost" if thr in LOST_THR else "")
+    v_par = {"retained_ohnolog": "pair", "lost_duplicate": "lost"}.get(row.get("p_label") or "", "")
+    v_tree = {"pair": "pair", "lost_duplicate": "lost"}.get(str(row.get("d_call") or ""), "") if str(row.get("d_status")) == "ok" else ""
+    return v_thr, v_par, v_tree
 
 
-def _before_cichlids(row, cl, p, pos, pub):
-    tree = str(row.get("d_dup_level")) if str(row.get("d_call")) == "later_duplicate_before_cichlids" else ""
-    older = [x for x in LADDER if x in cl or x == tree]
-    ok = p == "lost_duplicate" and older and _n(row.get("orig_copies_n")) >= 2 and pos == "tandem" and not pub
-    return ";".join(older) if ok else ""
+def _names(v, what):
+    return ", ".join(n for n, x in zip(("thresholds", "parsimony", "tree"), v) if x == what)
 
 
 def assign(row: dict) -> dict:
@@ -85,64 +85,51 @@ def _assign(row: dict) -> dict:
     thr = row.get("b_label_raw") or row.get("b_label") or ""
     p = row.get("p_label") or ""
     pos = _positions(row)
-    out = {"t_positions": pos}
+    v = votes(row)
+    out = {"t_positions": pos, "t_vote_thr": v[0], "t_vote_par": v[1], "t_vote_tree": v[2]}
+
+    def res(r, call, tier, basis, when=""):
+        return {**out, "t_row": r, "t_call": call, "t_tier": tier, "t_basis": basis, "t_when": when}
+
     if str(row.get("p_status")) != "ok":
-        return {**out, "t_row": "unclassified", "t_call": "no_anchor", "t_tier": "unclassified", "t_basis": "no outgroup anchor in the tree"}
+        return res("unclassified", "no_anchor", "unclassified", "no outgroup anchor in the tree")
     if str(row.get("expanded_family")) == "True":
-        return {**out, "t_row": "unclassified", "t_call": "expanded_family", "t_tier": "unclassified", "t_basis": "family with many focal genes"}
-    pub = _n(row.get("t_pairs_relaxed_n"))
+        return res("unclassified", "expanded_family", "unclassified", "family with many focal genes")
+    d_call = str(row.get("d_call") or "") if str(row.get("d_status")) == "ok" else ""
     if thr == "multi_copy" or p == "multi_copy":
-        if str(row.get("d_call")) == "pair":        # a pair at the teleost root in a family with many copies
-            tier = "probable" if pub else "possible"
-            return {**out, "t_row": "R2/3/4", "t_call": "retained_pair", "t_tier": tier,
-                    "t_basis": "three or more copies in many teleosts, but the gene tree shows a pair at the teleost root"
-                               + (f"; in a published pair in {pub} of 4 species" if pub else "")}
-        return {**out, "t_row": "unclassified", "t_call": "many_copies", "t_tier": "unclassified", "t_basis": "three or more copies in many teleosts"}
+        if d_call == "pair":           # the counts see an expansion; the gene tree still shows a pair at the teleost root
+            return res("R2/3/4", "retained_pair", "possible", "three or more copies in many teleosts, but the gene tree shows a pair at the teleost root")
+        return res("unclassified", "many_copies", "unclassified", "three or more copies in many teleosts")
+    npair, nlost = v.count("pair"), v.count("lost")
     cl = _later_levels(row)
-    pair_t, pair_p = thr in PAIR_THR, p == "retained_ohnolog"
-    zloss = "danio_rerio" in str(row.get("p_loss_species") or "").split(";")
-    when = _before_cichlids(row, cl, p, pos, pub)
-
-    def res(r, call, tier, basis):
-        return {**out, "t_row": r, "t_call": call, "t_tier": tier, "t_basis": basis}
-
-    def before():
-        return {**out, "t_row": "R4", "t_call": "later_duplicate_before_cichlids", "t_tier": "possible", "t_when": when,
-                "t_basis": f"parsimony places a clade-level duplication at {when.replace(';', ' and ')}; copies are tandem and in no published pair"}
-
-    if pair_t and pair_p:
-        return res("R3" if zloss else "R2", "retained_pair", "core", "both calls: a pair" + ("; zebrafish lacks the second copy" if zloss else ""))
-    if pair_t or pair_p:
-        who = "thresholds" if pair_t else "parsimony"
-        other = f"parsimony says {p or 'nothing'}" if pair_t else f"thresholds say {thr or 'nothing'}"
-        if pub:
-            return res("R2/3/4", "retained_pair", "probable", f"{who} say a pair, {other}; in a published pair in {pub} of 4 species")
-        tree = str(row.get("d_call")) == "pair"
-        if pos == "dispersed" or tree:
-            ev = " and ".join(x for x, y in (("copies on different sequences", pos == "dispersed"), ("the gene tree shows a pair", tree)) if y)
-            return res("R2/3/4", "retained_pair", "possible", f"{who} say a pair, {other}; {ev} (weak evidence)")
-        if when:
-            return before()
-        why = "copies are tandem and in no published pair" if pos == "tandem" else "no independent evidence"
-        return res("R2/3/4", "unresolved", "disputed", f"{who} say a pair, {other}; {why}")
-    if thr == "single":
-        if p == "lost_duplicate" and not cl:
-            return res("R1", "lost_duplicate", "core", "both calls: lost early, no later duplicate in a clade")
-        if when:
-            return before()
-        why = "parsimony sees a later duplicate in a clade" if p == "lost_duplicate" else f"parsimony says {p or 'nothing'}"
-        return res("R1", "unresolved", "disputed", f"thresholds say single; {why}")
-    if thr == "cichlid_specific_duplication":
-        if p == "lost_duplicate" and "cichlid" in cl:
-            return res("R5", "cichlid_specific_duplicate", "core", "both calls: a later duplicate in the cichlids")
-        if when:
-            return before()
-        return res("R5", "unresolved", "disputed", f"thresholds say a cichlid duplicate; parsimony says {p or 'nothing'}")
-    if when:
-        return before()
-    if p == "lost_duplicate" and "cichlid" in cl:
-        return res("R5", "unresolved", "disputed", f"parsimony sees a cichlid duplicate; thresholds say {thr or 'nothing'}")
-    return res("other", "unresolved", "disputed", f"thresholds say {thr or 'nothing'}; parsimony says {p or 'nothing'}")
+    pub = _n(row.get("t_pairs_relaxed_n"))
+    if npair < 2:
+        # a later duplicate in the cichlids: thresholds and parsimony agree on it, or the tree and one of them
+        thr_c, par_c = thr == "cichlid_specific_duplication", p == "lost_duplicate" and "cichlid" in cl
+        tree_c = d_call == "later_duplicate_in_cichlids"
+        if thr_c + par_c + tree_c >= 2:
+            tier = "core" if (thr_c and par_c) else "probable"
+            who = ", ".join(n for n, x in (("thresholds", thr_c), ("parsimony", par_c), ("tree", tree_c)) if x)
+            return res("R5", "cichlid_specific_duplicate", tier, f"a later duplicate in the cichlids ({who})")
+        # a later duplicate before the cichlids: a clade-level duplication at the teleost, percomorph or ovalentarian level
+        tree_level = str(row.get("d_dup_level") or "") if d_call == "later_duplicate_before_cichlids" else ""
+        par_older = [x for x in LADDER if x in cl] if p == "lost_duplicate" else []
+        older = [x for x in LADDER if x in par_older or x == tree_level]
+        if older and _n(row.get("orig_copies_n")) >= 2 and pos == "tandem" and not pub:
+            tier = "probable" if (par_older and tree_level) else "possible"
+            src = "parsimony and the tree" if tier == "probable" else ("the tree" if tree_level else "parsimony")
+            return res("R4", "later_duplicate_before_cichlids", tier,
+                       f"{src} {'place' if ' and ' in src else 'places'} a clade-level duplication at {' and '.join(older)}; copies are tandem and in no published pair", ";".join(older))
+    if npair >= 2:
+        tier = "core" if npair == 3 else "probable"
+        other = f"; {_names(v, 'lost') or 'the third call'} says lost" if nlost else ("" if npair == 3 else "; the third call abstains")
+        return res("R2/3/4", "retained_pair", tier, f"{npair} of 3 calls say a pair ({_names(v, 'pair')}){other}")
+    if nlost >= 2:
+        tier = "core" if nlost == 3 else "probable"
+        other = f"; {_names(v, 'pair')} says a pair" if npair else ("" if nlost == 3 else "; the third call abstains")
+        return res("R1", "lost_duplicate", tier, f"{nlost} of 3 calls say lost ({_names(v, 'lost')}){other}")
+    say = "; ".join(f"{n}: {x or 'abstains'}" for n, x in zip(("thresholds", "parsimony", "tree"), v))
+    return res("other", "unresolved", "disputed", f"no majority ({say})")
 
 
 def tiers_summary(rows) -> dict:
@@ -153,14 +140,14 @@ def tiers_summary(rows) -> dict:
     out = {"genes": len(scored), "by_row_and_tier": {r: {t: by[(r, t)] for t in TIERS if by[(r, t)]} for r in rows_in}}
     placed = [r for r in scored if r["t_tier"] != "unclassified"]
     out["placed"] = len(placed)
-    out["core"] = sum(1 for r in placed if r["t_tier"] == "core")
-    out["probable"] = sum(1 for r in placed if r["t_tier"] == "probable")
-    out["possible"] = sum(1 for r in placed if r["t_tier"] == "possible")
-    out["disputed"] = sum(1 for r in placed if r["t_tier"] == "disputed")
+    for t in ("core", "probable", "possible", "disputed"):
+        out[t] = sum(1 for r in placed if r["t_tier"] == t)
     out["unclassified"] = {k: v for k, v in C(r["t_call"] for r in scored if r["t_tier"] == "unclassified").items()}
     out["by_category"] = {c: {t: n for t in TIERS if (n := sum(1 for r in scored if r["t_category"] == c and r["t_tier"] == t))}
                           for c in CATEGORIES}
-    pair_like = [r for r in placed if r["t_row"] in ("R2", "R3", "R2/3/4")]
+    out["votes_for_a_pair"] = dict(sorted(C(sum(1 for x in (r.get("t_vote_thr"), r.get("t_vote_par"), r.get("t_vote_tree")) if x == "pair")
+                                            for r in placed if r["t_call"] in ("retained_pair", "lost_duplicate", "unresolved")).items()))
+    pair_like = [r for r in placed if r["t_call"] == "retained_pair"]
     have = [r for r in pair_like if str(r.get("t_pairs_relaxed_n")) not in ("", "None")]
     out["published_pair_evidence_loaded"] = bool(have)
     if have:

@@ -65,3 +65,9 @@ and the call `later_duplicate_before_cichlids` in `t_call`; `t_row` is `R4` for 
 ## Changes in 0.12.0
 New `d_dup_level` and `d_dup_at_root`; `d_support` takes `both_early`, `shared_early`, `early_within`, `one_early`, `none_early` and, with
 `d_lineages`, `d_overlap`, `d_gene_lineage`, describes the deepest supported duplication (or the teleost root when there is none).
+
+
+## Changes in 0.13.0
+`t_vote_thr`, `t_vote_par`, `t_vote_tree` (pair, lost or empty); `t_tier` is core (all three agree), probable (two of three), possible
+(later duplicate before the cichlids on one line of evidence; a pair in a many-copy family on the tree alone), disputed (no
+majority) or unclassified; `t_row` is R1, R2/3/4, R4, R5, other or unclassified.

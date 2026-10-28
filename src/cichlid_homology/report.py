@@ -138,12 +138,13 @@ def write_report(summary: dict, path: Path) -> None:
     pa = A["parsimony_agreement"]
     L += [f"TreeFam and Compara parsimony labels (ambiguous counted as no call): {pa['labels']}; agree "
           f"{pa['agree_pct_when_both_called']}% when both called. Pairs: {pa['pairs_TreeFam_Compara']}", ""]
-    L += ["## Confidence tiers for B1", "",
-          "Rows: R1 a duplicate lost early; R2 both kept; R3 both kept, zebrafish lost one; R2/3/4 a pair whose depth "
-          "the counts cannot fix; R5 a later cichlid duplicate. core = the share-based and parsimony calls agree; "
-          "probable = one calls a pair and the gene is in a published pair; possible = one calls a pair and the copies "
-          "are on different sequences (weak evidence); disputed = the calls conflict and nothing settles it; "
-          "unclassified = not scored, expanded family or many copies.", ""]
+    L += ["## Categories and confidence for B1", "",
+          "Three calls read each gene's clade: the share of teleosts with two or more copies (thresholds), copy-number "
+          "parsimony on the species tree, and the gene tree reconciled with the species tree. Each votes `pair` (both copies "
+          "of the teleost duplication kept), `lost` or abstains. core = all three agree; probable = two of three; "
+          "possible = a later duplicate before the cichlids on one line of evidence, or a pair in a many-copy family on "
+          "the tree alone; disputed = no majority; unclassified = not scored, expanded family or many copies. "
+          "Published teleost-duplication pairs are not part of the calls: they are the outside check.", ""]
     for m in ("TreeFam", "Compara"):
         T = A["tiers"][m]
         trs = [[r, d.get("core", 0), d.get("probable", 0), d.get("possible", 0), d.get("disputed", 0), d.get("unclassified", 0)]
@@ -152,6 +153,7 @@ def write_report(summary: dict, path: Path) -> None:
               if T.get("published_pair_evidence_loaded") else "; published pairs not loaded (use --ohnologs)")
         cats = [[c, sum(d.values()), d.get("core", 0), d.get("probable", 0), d.get("possible", 0)] for c, d in T["by_category"].items()]
         L += [f"### {m}: simplified categories", "", _table(["category", "genes", "core", "probable", "possible"], cats), ""]
+        L += [f"Votes for a pair among genes with a pair, lost or no-majority call: {T['votes_for_a_pair']}.", ""]
         L += [f"### {m}: {T['placed']} genes placed in a row: core {T['core']}, probable {T['probable']}, "
               f"possible {T['possible']}, disputed {T['disputed']}{ev}. Unclassified: {T['unclassified']}", "",
               _table(["row", "core", "probable", "possible", "disputed", "unclassified"], trs), ""]

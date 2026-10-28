@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.13.0 (categories and confidence from the votes of three calls)
+- Run of 0.12.0 on Compara: the tree alone finds 82.4% of the 2,637 published-pair positives at 0.5% of the 8,192 negatives
+  (thresholds 84.0% / 0.8%; thresholds or tree 91.0% / 0.9%). The genes called pairs look like pairs (85% on different sequences,
+  45% in a published pair, 71% human OneToTwo; the 2,092 non-expanded genes with the pair node below the top of the teleost clade
+  83%, 41% and 72%); the later duplicates look local (57 to 88% tandem, 5 to 10% in a published pair).
+- The three calls (thresholds, parsimony, tree) form a confidence ladder. Votes for a pair, positives : negatives: 3 of 3
+  1,877 : 34; 2 of 3 365 : 27; 1 of 3 203 : 427; none 192 : 7,704.
+- `tiers.py` rewritten: each call votes `pair`, `lost` or abstains (`t_vote_thr`, `t_vote_par`, `t_vote_tree`); a majority sets the
+  category (Both copies kept (best guess), Lost duplicate), `core` when all three agree and `probable` when two do; no
+  majority is Disputed. The published pairs are no longer part of the calls (they were `probable`/`possible`): they stay in
+  the table (`t_pairs_*`) as an outside check; they still exclude a later duplicate before the cichlids (an ohnolog). A later
+  duplicate in the cichlids needs thresholds and parsimony (`core`) or the tree and one of them (`probable`); before the
+  cichlids needs parsimony or the tree, two or more tandem copies and no published pair (`possible`, or `probable` with both).
+  A pair in a many-copy family on the tree alone is `possible`. `t_row` is R1 (lost), R2/3/4 (pair), R4 (later before cichlids),
+  R5 (later in cichlids), other (no majority); R2 and R3 are no longer separate.
+- On the 0.12.0 Compara table: Lost duplicate 10,756 (core 9,278, probable 1,478); Both copies kept 6,800 (core 4,222, probable
+  1,747, possible 831); Later duplicate in cichlids 671; before cichlids 112; Disputed 1,067 (was 1,828); Unclassified 7,202.
+  90.2% of the published-pair positives land in Both copies kept and 94.8% of the negatives in Lost duplicate.
+- Report: the tiers section is rewritten for the votes. 143 offline tests.
+
 ## 0.12.0 (tree dating: the pair is the deepest supported duplication)
 - Run of 0.11.3 on Compara: the later-duplicate calls fell from 15,304 to 2,418 and the categories matched the preview. But
   1,328 of the 1,381 genes the tree called `later_duplicate_before_cichlids` were at the teleost level with a `disjoint` root and

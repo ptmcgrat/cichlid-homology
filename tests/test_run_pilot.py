@@ -134,12 +134,12 @@ def test_tiers_in_the_whole_pilot_with_and_without_published_pairs(tmp_path):
     summary, out = run(tmp_path, all_genes=True)
     t = rows(out / "pilot_genes.TreeFam.tsv")
     assert (t["Mzeb_1"]["t_row"], t["Mzeb_1"]["t_tier"]) == ("R1", "core")
-    assert (t["Mzeb_2"]["t_row"], t["Mzeb_2"]["t_tier"]) == ("R2", "core") and t["Mzeb_2"]["t_positions"] == "dispersed"
+    assert (t["Mzeb_2"]["t_row"], t["Mzeb_2"]["t_tier"]) == ("R2/3/4", "core") and t["Mzeb_2"]["t_positions"] == "dispersed"
     assert (t["Mzeb_4"]["t_row"], t["Mzeb_4"]["t_tier"]) == ("R5", "core")
     assert [t[g]["t_category"] for g in ("Mzeb_1", "Mzeb_2", "Mzeb_4")] == ["Lost duplicate", "Both copies kept (best guess)", "Later duplicate, in cichlids"]
     T = summary["A"]["tiers"]["TreeFam"]
     assert T["placed"] == 5 and T["core"] == 5 and T["published_pair_evidence_loaded"] is False
-    assert "## Confidence tiers for B1" in (out / "pilot_report.md").read_text()
+    assert "## Categories and confidence for B1" in (out / "pilot_report.md").read_text()
     d = tmp_path / "pairs"
     d.mkdir()
     for lvl in ("Strict", "Relaxed"):
