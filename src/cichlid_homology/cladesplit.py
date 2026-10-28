@@ -111,7 +111,7 @@ def _stats(vals):
     return med, cv
 
 
-def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, already_rooted=True):
+def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, already_rooted=True, profiles=None):
     """(family row, [group rows]) for one reference family tree, or None when nothing is left of it."""
     root = parse_newick(newick)
     sp_of = {x.name: ls.species(x.name) for x in leaves(root)}
@@ -220,6 +220,12 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
                      "tetrapod_rtt_median": round(med, 4) if med is not None else "", "tetrapod_rtt_cv": round(cv, 3) if cv is not None else "",
                      "human_rtt": round(hd, 4) if hd is not None else "",
                      "human_rel_rate": round(hd / omed, 3) if (hd is not None and omed) else "", "lengths_missing": int(missing)})
+    if profiles is not None:                                          # the species profile of each clade that holds a teleost duplication node
+        from .cladeprofile import profile_of
+        for r, g in zip(rows, [g for g in groups if any(T.M[id(x)] is not None for x in rt.leaves_in(g))]):
+            pf = profile_of(fid, r["group"], g, rt, T, supported, names)
+            if pf:
+                profiles.append(pf)
     fam = {"family": fid, "n_genes": sum(1 for x in rt.leaves if T.M[id(x)] is not None),
            "n_human": sum(1 for x in rt.leaves if x.sp == names["human"]), "n_groups": len(rows),
            "n_groups_with_human": sum(1 for r in rows if r["n_human"] > 0), "n_ancient_dups": n_anc,
@@ -227,7 +233,7 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
     return fam, rows
 
 
-def run_split(prepared, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, only_human=True, limit=0, progress=None, already_rooted=True):
+def run_split(prepared, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, only_human=True, limit=0, progress=None, already_rooted=True, profiles=None):
     prepared = Path(prepared)
     files, _ = reference_files(prepared / "trees")
     ids = sorted(f for f, d in files.items() if "tree" in d)
@@ -243,7 +249,7 @@ def run_split(prepared, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, only
                 skipped += 1
                 continue
         try:
-            r = split_family(fid, text, ls, st, clades, ctx, names, pair_overlap, already_rooted)
+            r = split_family(fid, text, ls, st, clades, ctx, names, pair_overlap, already_rooted, profiles)
         except Exception as e:
             errors.append((fid, f"{type(e).__name__}: {e}"[:160]))
             continue

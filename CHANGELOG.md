@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.20.0 (species profiles of the ohnolog clades)
+- `clade-split` now also writes, for every clade that holds a teleost-level duplication node (the highest such node is the pair node), the species profile
+  of the pair: for each species the number of genes outside the node (the ancestral copy), in lineage A and in lineage B (`clade_species.<part>.clades.json`,
+  counts as an `outside.A.B` string per species in the order of `clade_species.<part>.species.json`), the later duplications inside each lineage that cover
+  two or more species (lineage, level, species), and the zebrafish genes of each lineage (to assign a focal-species gene to a lineage). The species table is in
+  species-tree order with a group (tetrapod, coelacanth, cartilaginous fish, gar or reedfish, early teleost, percomorph, ovalentarian, cichlid) and a mark for
+  the salmonid, carp and cyprinid-specific genome duplications; `clade_species.<part>.tree.json` is the species tree pruned to those species. `--no-species-profiles`
+  skips it. Why: to draw which tetrapods and teleosts carry each ohnolog, which species miss one member, and which duplicated one of them. 196 offline tests.
+
 ## 0.19.0 (synteny in the gene table, ambiguous clades resolved, chromosome tables)
 - First real table (0.18.0, with positions): the 2,504 paired genes on different chromosomes fell on only 111 chromosome pairs, the largest carrying 129 to
   220 pairs; 96% of the pairs sat on a chromosome pair holding at least 3 other pairs (published pairs 98%, pairs with no published support 94%), and 191 of

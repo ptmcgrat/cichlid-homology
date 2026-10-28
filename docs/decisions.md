@@ -193,3 +193,10 @@ large clades (expanded families), and whether to tell the coordinator that the s
   other three signals, so a pair does not vouch for itself: its synteny counts the other pairs only. The support cutoff (5 other pairs) was read off the first real
   table, where chromosome pairs hold 1 to 220 pairs and 96% of pairs share a chromosome pair with at least 3 others.
 - The chromosome names are the annotation's accessions (for example NC_135171.1); mapping them to linkage groups is for the owner or the coordinator.
+
+
+## 0.20.0: the summary phylogeny of an ohnolog pair
+- Owner request: show for a pair which tetrapods and teleosts carry it, which species lack one member, and which duplicated one of the ohnologs.
+- Design: a species-tree profile (a species tree on the left, columns for the ancestral copy, ohnolog A and ohnolog B on the right, a count per cell), and an overview of
+  all pairs by species. A hollow cell is a lost copy or an annotation gap; a count of two or more in a lineage is a later duplicate; a duplication shared by a clade is
+  a bracket. Only M. zebra among the cichlids is in the Compara panel; the other cichlids come with OrthoFinder.

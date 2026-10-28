@@ -189,9 +189,10 @@ def _clade_split(args) -> int:
         prepared = Path(getattr(fr, "local", fr)) / "prepared"
     print(f"reference trees under {prepared}; loading the leaf-to-species table ...", flush=True)
     ls = load_leaf_species(layout, args.part)
+    profiles = None if args.no_species_profiles else []
     fams, groups, errors, skipped = C.run_split(prepared, ls, st, clades, ParsimonyContext(st, clades), pair_overlap=args.pair_overlap,
                                                 only_human=not args.all_families, limit=args.limit, already_rooted=(args.rooting == "auto"),
-                                                progress=lambda i, n: print(f"  {i} families", flush=True))
+                                                progress=lambda i, n: print(f"  {i} families", flush=True), profiles=profiles)
     out = Path(args.out).expanduser() if args.out else default_out("clade_split")
     out.mkdir(parents=True, exist_ok=True)
     for name, cols, rows in (("families", C.FAMILY_COLS, fams), ("groups", C.GROUP_COLS, groups)):
@@ -201,6 +202,12 @@ def _clade_split(args) -> int:
             w.writerows(rows)
     summ = C.summarize_split(fams, groups, errors, skipped)
     summ.update(cichlid_homology=__version__, part=args.part, pair_overlap=args.pair_overlap, rooting=args.rooting)
+    if profiles:                                                     # species profiles of the clades with a teleost duplication node
+        from cichlid_data.master_tree import load_master_tree
+
+        from .cladeprofile import write_files
+        from .master import newick_of
+        summ["species_profiles"] = write_files(out, args.part, profiles, clades, newick_of(load_master_tree()))
     (out / f"clade_split.{args.part}.json").write_text(json.dumps(summ, indent=1, default=str))
     text = C.report_split_text(summ, args.part)
     (out / f"clade_split.{args.part}.md").write_text(text)
@@ -398,6 +405,7 @@ def main(argv=None) -> int:
                     help="auto: keep a tree's own root when it has two children; reconcile: always root by reconciliation")
     cs.add_argument("--pair-overlap", type=float, default=0.5, help="share of species two sides must have in common to be a duplication")
     cs.add_argument("--all-families", action="store_true", help="also the families without a human gene (default: only those with one)")
+    cs.add_argument("--no-species-profiles", action="store_true", help="skip the species profiles of the clades with a teleost duplication node")
     cs.add_argument("--limit", type=int, default=0, help="only the first N families (a quick test)")
     cs.add_argument("--out", default=None, help="default: ~/share/clade_split_<version>_<timestamp>")
     cs.set_defaults(func=_clade_split)
