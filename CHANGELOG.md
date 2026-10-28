@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.0 (the gene table)
+- New read-only command `cichlid-homology gene-table`: one row per focal-species gene, 66 columns in 11 groups (identity; family and clade; closest human gene;
+  closest zebrafish gene; teleost trend and relationships; human-side cleanliness; B1 call; ohnolog; later duplicates and out-paralogs; flags; provenance),
+  from the pilot gene tables of Compara (and TreeFam, for agreement), the clade table of `clade-split`, the published pairs (optional) and the gene positions
+  (`--positions`, through the layout). Writes `gene_table.<species>.tsv`, a JSON summary and `gene_table_columns.md`.
+- A gene's clade is the clade of its closest zebrafish protein (else that of its closest human protein if it has teleosts). The relationships (`rel_human`,
+  `rel_zebrafish`) are the clade's human or zebrafish gene count against the teleost median, not the focal copy number, which is compared in `copy_vs_trend`.
+- Ohnolog: a 1:2 clade with two focal genes is a pair (partner gene, symbol, lineage, matching zebrafish gene, confidence high/medium/low from three signals:
+  different lineages, different chromosomes, two different zebrafish genes; the published pairs are an outside check); one focal gene means the partner was lost
+  (the other zebrafish genes are listed); three or more are ambiguous until OrthoFinder. A 1:1 clade with two focal genes on different chromosomes is a possible pair,
+  otherwise a later duplicate. `ohnologs.load_pair_partners` reads the published partners. 182 offline tests.
+
 ## 0.17.0 (teleost trend of each clade)
 - The clade table now carries the teleost trend: the median number of genes per teleost species present (`teleost_median_genes`), the shares of
   teleost species with one, two and three or more genes, the median over the early teleosts and over the percomorphs and below, the number of zebrafish genes

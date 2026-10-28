@@ -209,6 +209,44 @@ def _clade_split(args) -> int:
     return 0
 
 
+def _gene_table(args) -> int:
+    """The gene table of the focal species: closest genes, clade, teleost trend, B1 call and ohnolog (from earlier outputs; read-only)."""
+    import datetime
+
+    from . import genetable as GT
+    from .ohnologs import load_pair_partners
+
+    compara = read_tsv(Path(args.compara).expanduser())
+    treefam = read_tsv(Path(args.treefam).expanduser()) if args.treefam else []
+    groups, fams = read_tsv(Path(args.clades).expanduser()), read_tsv(Path(args.clade_families).expanduser())
+    partners = load_pair_partners(Path(args.ohnologs).expanduser()) if args.ohnologs else None
+    positions = None
+    if args.positions:
+        from cichlid_data import get_layout
+
+        from .owngenes import gene_order, own_genes
+        layout = get_layout()
+        genes = own_genes(layout, args.species)
+        order = gene_order(genes)
+        positions = {g: (i["seqid"], i["start"], order[g][1] if g in order else "") for g, i in genes.items()}
+    rows = GT.build_gene_table(compara, treefam, groups, fams, partners, positions, __version__, datetime.date.today().isoformat(),
+                               reassign=args.reassign, focal_prefix=args.species)
+    out = Path(args.out).expanduser() if args.out else default_out("gene_table")
+    out.mkdir(parents=True, exist_ok=True)
+    import csv
+    with open(out / f"gene_table.{args.species}.tsv", "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=GT.COLUMNS, delimiter="\t")
+        w.writeheader()
+        w.writerows(rows)
+    summ = GT.summarize_table(rows)
+    summ["cichlid_homology"] = __version__
+    (out / f"gene_table.{args.species}.json").write_text(json.dumps(summ, indent=1))
+    (out / "gene_table_columns.md").write_text(GT.columns_markdown())
+    print(json.dumps(summ, indent=1))
+    print(f"\nwritten to {out}")
+    return 0
+
+
 def _pilot(args) -> int:
     from cichlid_data import Catalog, get_layout
     from cichlid_data.clades import Clades
@@ -333,6 +371,17 @@ def main(argv=None) -> int:
     s2.add_argument("--n-denovo", type=int, default=100)
     s2.add_argument("--out", default=None)
     s2.set_defaults(func=_survey2)
+    gt = sub.add_parser("gene-table", help="the focal species' gene table: closest genes, clade, teleost trend, B1 call and ohnolog (read-only)")
+    gt.add_argument("--compara", required=True, help="pilot_genes.Compara.tsv of the pilot run")
+    gt.add_argument("--treefam", default=None, help="pilot_genes.TreeFam.tsv (for the agreement columns)")
+    gt.add_argument("--clades", required=True, help="clade_split.Compara.groups.tsv")
+    gt.add_argument("--clade-families", required=True, help="clade_split.Compara.families.tsv")
+    gt.add_argument("--ohnologs", default=None, help="folder of OHNOLOGS v2 3R pair files (the published-pair check)")
+    gt.add_argument("--positions", action="store_true", help="read seqid, start and gene order from the genome annotation (through the layout)")
+    gt.add_argument("--species", default="Mzeb")
+    gt.add_argument("--reassign", action="store_true", help="recompute the B1 categories from an older pilot table with the current logic")
+    gt.add_argument("--out", default=None, help="default: ~/share/gene_table_<version>_<timestamp>")
+    gt.set_defaults(func=_gene_table)
     cs = sub.add_parser("clade-split", help="split the reference families at their ancient duplications and score each clade (read-only)")
     cs.add_argument("--part", default="Compara", choices=["Compara", "TreeFam"])
     cs.add_argument("--prepared", default=None, help="the prepared/ folder (default: from the layout)")

@@ -178,3 +178,10 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - Owner clarification: the 1:1 and 1:2 relationships (with human, and with zebrafish) are about the teleost trend of a clade (the median gene number across
   the teleost species close to 1 or to 2), not about the copy number of M. zebra or of any one species. The unit is the clade; the M. zebra copy number is then
   compared with its clade's trend (a pair kept against a cichlid-specific duplication, a loss).
+
+
+## 0.18.0: the gene table
+- Owner decision: a gene table of the focal species that includes the ohnolog information, with the columns listed in `gene_table_columns.md`.
+- The human-side cleanliness tiers use the cutoffs tried on the first clade tables (strict: 0.9 single-copy share, 10 tetrapod species, rate 0.8-1.2, clade holds 90% of the
+  family's teleosts; loose: 0.7, 5, 0.7-1.3, 80%); they are recorded in the `parameters` column and are the owner's to change.
+- Deviation from the proposed columns: `symbol_check` is two columns (human and zebrafish); `published_pair` is one text column.

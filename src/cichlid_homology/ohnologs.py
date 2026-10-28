@@ -74,3 +74,25 @@ def support(row: dict, sets: dict) -> dict:
     rel = [sp for sp, s in syms.items() if sp in sets and s in sets[sp]["relaxed"]]
     strict = [sp for sp, s in syms.items() if sp in sets and s in sets[sp]["strict"]]
     return {"t_pairs_relaxed_n": len(rel), "t_pairs_strict_n": len(strict), "t_pairs_species": ";".join(rel)}
+
+
+def load_pair_partners(directory, level: str = "relaxed") -> dict:
+    """{species: {symbol: {partner symbols}}} for the published pairs of each species (protein-coding, fish genome duplication, real
+    symbols); `level` is relaxed (which holds the strict pairs) or strict."""
+    files = find_files(directory)
+    out = {}
+    for code, name in SPECIES.items():
+        f = files.get((code, level.capitalize())) or files.get((code, "Relaxed"))
+        if not f:
+            continue
+        m: dict = {}
+        with open(f, newline="") as fh:
+            for r in csv.DictReader(fh, delimiter="\t"):
+                if r.get("Gene type") != "protein_coding" or r.get("Duplication time") != "FishWGD":
+                    continue
+                a, b = (r.get("Symbol1") or "").strip().lower(), (r.get("Symbol2") or "").strip().lower()
+                if a and b and "(" not in a + b and not a.startswith("ens") and not b.startswith("ens"):
+                    m.setdefault(a, set()).add(b)
+                    m.setdefault(b, set()).add(a)
+        out[name] = m
+    return out
