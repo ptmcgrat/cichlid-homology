@@ -172,3 +172,9 @@ large clades (expanded families), and whether to tell the coordinator that the s
   longer than the other tetrapods'). Cutoffs to be chosen from the data, e.g. by which clades give the best agreement of the B1 calls.
 - Known limit: reconciliation can root a family with the fish outside a tetrapod duplication when a paralog is missing in fish; the tree's own root is kept
   by default when it has two children, and the `rooting` column says which was used. Compare `--rooting auto` and `reconcile` on real data.
+
+
+## 0.17.0: goals 5 and 6 are teleost trends
+- Owner clarification: the 1:1 and 1:2 relationships (with human, and with zebrafish) are about the teleost trend of a clade (the median gene number across
+  the teleost species close to 1 or to 2), not about the copy number of M. zebra or of any one species. The unit is the clade; the M. zebra copy number is then
+  compared with its clade's trend (a pair kept against a cichlid-specific duplication, a loss).

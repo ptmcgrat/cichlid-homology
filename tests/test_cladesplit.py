@@ -132,3 +132,36 @@ def test_each_clade_lists_its_human_and_zebrafish_protein_ids_so_genes_can_be_jo
     assert one["human_proteins"] == "Hsap_1;Hsap_2" and one["zebrafish_proteins"] == "Drer_1"
     solo = run("Hsap_1;")[1][0]
     assert (solo["human_proteins"], solo["zebrafish_proteins"]) == ("Hsap_1", "")
+
+
+def test_the_teleost_median_the_shares_and_the_trend_label():
+    from cichlid_homology.cladesplit import trend_label
+    assert [trend_label(x) for x in (None, "", 1, 1.0, 1.5, 2, 2.5, 3, 4)] == ["", "", "1:1", "1:1", "mixed 1-2", "1:2", "mixed 2-3", "1:3+", "1:3+"]
+    # aang 1 gene, drer 2, trub 3: the median is 2; early teleosts (aang, drer) 1.5; percomorphs (trub) 3
+    fam, groups = run("((Hsap_1,Mmus_1),(Locu_1,(Aang_1,(Drer_1,Drer_2,(Trub_1,Trub_2,Trub_3)))));")
+    g = groups[0]
+    assert (g["teleost_median_genes"], g["teleost_trend"], g["zebrafish_genes"]) == (2, "1:2", 2)
+    assert (g["teleost_share_one"], g["teleost_share_two"], g["teleost_share_three_plus"]) == (0.333, 0.333, 0.333)
+    assert (g["early_teleost_median_genes"], g["percomorph_median_genes"]) == (1.5, 3)
+    clean = run("((Hsap_1,Mmus_1),(Locu_1,(Aang_1,Drer_1)));")[1][0]
+    assert (clean["teleost_median_genes"], clean["teleost_trend"], clean["teleost_share_one"]) == (1, "1:1", 1.0)
+    none = run("(((Hsap_1,Mmus_1),(Aang_1,Drer_1)),(Hsap_2,Mmus_2));")[1]
+    assert [x["teleost_trend"] for x in none if x["n_teleost_species"] == 0] == [""]
+
+
+def test_the_summary_tabulates_the_trend_against_the_zebrafish_genes(tmp_path):
+    prep = tmp_path / "prepared"
+    (prep / "trees").mkdir(parents=True)
+    trees = {"Q1": "((Hsap_1,Mmus_1),(Locu_1,(Aang_1,Drer_1)));",                                  # 1:1, zebrafish 1
+             "Q2": "((Hsap_1,Mmus_1),(Locu_1,((Aang_1,Drer_1),(Aang_2,Drer_2))));",                # 1:2, zebrafish 2
+             "Q3": "((Hsap_1,Mmus_1),(Locu_1,(Aang_1,(Drer_1,Drer_2))));"}                         # aang 1, drer 2: median 1.5, mixed
+    for f, tr in trees.items():
+        (prep / "trees" / f"{f}.nhx").write_text(tr)
+    sp, cl = st(), Clades()
+    fams, groups, errors, skipped = run_split(prep, LS(), sp, cl, ParsimonyContext(sp, cl), NAMES)
+    s = summarize_split(fams, groups, errors, skipped)
+    one = s["teleost_trend"]["1"]
+    assert one["clades_with_teleosts"] == 3
+    assert one["trends"]["1:1"]["zebrafish_genes"] == {"0": 0, "1": 1, "2": 0, "3+": 0}
+    assert one["trends"]["1:2"]["zebrafish_genes"]["2"] == 1 and one["trends"]["mixed 1-2"]["clades"] == 1
+    assert "Teleost trend" in report_split_text(s, "Compara")

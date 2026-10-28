@@ -18,6 +18,10 @@ Rooting: with `already_rooted` the tree's own root is kept when it has exactly t
 the tree is rooted by reconciliation with the master species tree, which can put the fish outside a tetrapod duplication when a
 paralog is missing in fish; `rooting` in the family row says which was used.
 
+Teleost trend (0.17): the median number of genes per teleost species present in the clade, the shares of species with one, two and three or more
+genes, the same median over the early teleosts and over the percomorphs and below, the number of zebrafish genes, and a label: 1:1 (median 1), 1:2
+(median 2), 1:3+ (3 or more), or mixed (a half-integer median: the species are split). The median needs no cutoff.
+
 Each clade row lists the protein IDs of its human and zebrafish genes (`human_proteins`, `zebrafish_proteins`, `;`-joined), so a gene that
 has a closest human or zebrafish gene in the family joins to its clade through that protein.
 
@@ -40,11 +44,34 @@ from .tree import leaves, parse_newick, postorder, prune
 from .treedate import _bits, _Tree
 
 GROUP_COLS = ["family", "group", "n_human", "human_proteins", "zebrafish_proteins", "n_genes", "n_species", "n_tetrapod_genes", "n_tetrapod_species", "tetrapod_mean_genes",
-              "tetrapod_single_copy_share", "n_teleost_genes", "n_teleost_species", "teleost_mean_genes", "teleost_species_share_of_family",
+              "tetrapod_single_copy_share", "n_teleost_genes", "n_teleost_species", "teleost_mean_genes", "teleost_median_genes", "teleost_share_one", "teleost_share_two",
+              "teleost_share_three_plus", "early_teleost_median_genes", "percomorph_median_genes", "zebrafish_genes", "teleost_trend",
+              "teleost_species_share_of_family",
               "tetrapod_species_share_of_family", "n_gar_reedfish", "tetrapod_clade_dups", "tetrapod_species_dups", "teleost_clade_dups",
               "mixed_dups", "tetrapod_rtt_median", "tetrapod_rtt_cv", "human_rtt", "human_rel_rate", "lengths_missing"]
 FAMILY_COLS = ["family", "n_genes", "n_human", "n_groups", "n_groups_with_human", "n_ancient_dups", "n_family_tetrapod_species",
                "n_family_teleost_species", "root_cost", "rooting"]
+
+
+def trend_label(median) -> str:
+    """The teleost trend of a clade from the median number of genes per teleost species present (no cutoff: the median is an integer or
+    a half): 1 is 1:1, 2 is 1:2, 3 or more is 1:3+, and in between the species are split."""
+    if median is None or median == "":
+        return ""
+    m = float(median)
+    if m <= 1.0:
+        return "1:1"
+    if m < 2.0:
+        return "mixed 1-2"
+    if m == 2.0:
+        return "1:2"
+    if m < 3.0:
+        return "mixed 2-3"
+    return "1:3+"
+
+
+def _med(v):
+    return statistics.median(v) if v else ""
 
 
 def _overlap(T, v) -> float:
@@ -149,6 +176,10 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
         tet_sp = [s for s in per if s in tet]
         tel_sp = [s for s in per if s in tel]
         n_tet, n_tel = sum(per[s] for s in tet_sp), sum(per[s] for s in tel_sp)
+        tcounts = [per[s] for s in tel_sp]
+        tmed = _med(tcounts)
+        early_c = [per[s] for s in tel_sp if T.rank.get(s) == 1]
+        perc_c = [per[s] for s in tel_sp if T.rank.get(s, 0) >= 2]
         dists, missing = _rtt(g, T)
         tet_d = [d for x, d in dists.items() if x.sp in tet]
         hum_d = [d for x, d in dists.items() if x.sp == names["human"]]
@@ -176,6 +207,12 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
                      "tetrapod_single_copy_share": round(sum(1 for s in tet_sp if per[s] == 1) / len(tet_sp), 3) if tet_sp else "",
                      "n_teleost_genes": n_tel, "n_teleost_species": len(tel_sp),
                      "teleost_mean_genes": round(n_tel / len(tel_sp), 3) if tel_sp else "",
+                     "teleost_median_genes": tmed,
+                     "teleost_share_one": round(sum(1 for c in tcounts if c == 1) / len(tcounts), 3) if tcounts else "",
+                     "teleost_share_two": round(sum(1 for c in tcounts if c == 2) / len(tcounts), 3) if tcounts else "",
+                     "teleost_share_three_plus": round(sum(1 for c in tcounts if c >= 3) / len(tcounts), 3) if tcounts else "",
+                     "early_teleost_median_genes": _med(early_c), "percomorph_median_genes": _med(perc_c),
+                     "zebrafish_genes": per.get(names["zebrafish"], 0), "teleost_trend": trend_label(tmed),
                      "teleost_species_share_of_family": round(len(tel_sp) / fam_tel, 3) if fam_tel else "",
                      "tetrapod_species_share_of_family": round(len(tet_sp) / fam_tet, 3) if fam_tet else "",
                      "n_gar_reedfish": sum(per[s] for s in per if s in gar), "tetrapod_clade_dups": kinds["tet_clade"],
@@ -269,6 +306,26 @@ def _profile(gs) -> dict:
             "tetrapod_rtt_cv_quantiles": _q([g["tetrapod_rtt_cv"] for g in gs])}
 
 
+TRENDS = ("1:1", "mixed 1-2", "1:2", "mixed 2-3", "1:3+")
+
+
+def _trend_table(groups) -> dict:
+    """For clades with exactly one (and two) human genes and teleosts: the teleost trend (median genes per teleost species) against the
+    number of zebrafish genes in the clade, and the early-teleost and percomorph medians for the 1:1 and 1:2 clades."""
+    out = {}
+    for k in (1, 2):
+        sub = [g for g in groups if g["n_human"] == k and g["n_teleost_species"] > 0]
+        d = {"clades_with_teleosts": len(sub), "trends": {}}
+        for tr in TRENDS:
+            gs = [g for g in sub if g["teleost_trend"] == tr]
+            d["trends"][tr] = {"clades": len(gs), "zebrafish_genes": {str(z) if z < 3 else "3+": sum(1 for g in gs if min(g["zebrafish_genes"], 3) == z) for z in (0, 1, 2, 3)},
+                               "median_teleost_species": _median([g["n_teleost_species"] for g in gs]),
+                               "median_share_one": _q([g["teleost_share_one"] for g in gs]), "median_share_two": _q([g["teleost_share_two"] for g in gs]),
+                               "early_vs_percomorph_median": dict(collections.Counter(f"{g['early_teleost_median_genes']} / {g['percomorph_median_genes']}" for g in gs).most_common(6))}
+        out[str(k)] = d
+    return out
+
+
 def _kbin(k):
     return str(k) if k <= 4 else ("5-9" if k <= 9 else "10+")
 
@@ -290,6 +347,7 @@ def summarize_split(fams, groups, errors, skipped) -> dict:
         "from_families_with_one_human_gene": _profile([g for g in one if fam_k[g["family"]] == 1]),
         "from_families_with_several_human_genes": _profile([g for g in one if fam_k[g["family"]] > 1])}
     out["groups_with_two_human_genes"] = _profile([g for g in groups if g["n_human"] == 2])
+    out["teleost_trend"] = _trend_table(groups)
     four = [f["family"] for f in fams if f["n_human"] == 4][:8]
     out["examples_families_with_four_human_genes"] = {fid: [{k: g[k] for k in ("group", "n_human", "n_tetrapod_species", "tetrapod_mean_genes",
                                                                         "tetrapod_single_copy_share", "n_teleost_species", "teleost_mean_genes",
@@ -325,6 +383,16 @@ def report_split_text(s: dict, part: str) -> str:
     L += _profile_text("all", one["all"]) + _profile_text("from families with one human gene", one["from_families_with_one_human_gene"])
     L += _profile_text("from families with several human genes (the split ones)", one["from_families_with_several_human_genes"])
     L += ["## Clades with two human genes", ""] + _profile_text("all", s["groups_with_two_human_genes"])
+    L += ["## Teleost trend: the median number of genes per teleost species in the clade", "",
+          "1:1 = median 1, 1:2 = median 2, 1:3+ = median 3 or more; the mixed classes have a median of 1.5 or 2.5 (the species are split). "
+          "Early teleosts and percomorphs are the two halves of the teleost species.", ""]
+    for k, d in s["teleost_trend"].items():
+        L += [f"### Clades with {k} human gene{'s' if k != '1' else ''} and teleosts: {d['clades_with_teleosts']}", "",
+              "| trend | clades | zebrafish 0 | 1 | 2 | 3+ | median teleost species | early / percomorph medians (most common) |", "|---|---|---|---|---|---|---|---|"]
+        for tr, v in d["trends"].items():
+            z = v["zebrafish_genes"]
+            L.append(f"| {tr} | {v['clades']} | {z['0']} | {z['1']} | {z['2']} | {z['3+']} | {v['median_teleost_species']} | {v['early_vs_percomorph_median']} |")
+        L += [""]
     L += ["## Examples: families with four human genes", ""]
     for fid, gs in s["examples_families_with_four_human_genes"].items():
         L += [f"{fid}: " + " | ".join(

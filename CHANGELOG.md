@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.17.0 (teleost trend of each clade)
+- The clade table now carries the teleost trend: the median number of genes per teleost species present (`teleost_median_genes`), the shares of
+  teleost species with one, two and three or more genes, the median over the early teleosts and over the percomorphs and below, the number of zebrafish genes
+  in the clade, and `teleost_trend`: 1:1 (median 1), 1:2 (median 2), 1:3+ (median 3 or more), or `mixed 1-2` / `mixed 2-3` (a half-integer median: the species
+  are split). The median needs no cutoff.
+- Why: for the 1:1 and 1:2 relationships the owner wants the trend across the teleosts (the median gene number close to 1 or to 2), not the copy number of one
+  species. On the 0.16.1 table, with the mean as a stand-in, the 13,184 clades with one human gene and teleosts were bimodal: 73% about 1 (mean up to 1.25),
+  8% in the valley (1.25 to 1.75), 18% about 2 (1.75 to 2.5), 1% beyond; in the about-2 clades zebrafish kept both copies in 1,545 of 2,316.
+- The report tabulates the trend against the number of zebrafish genes in the clade for clades with one and with two human genes. 168 offline tests.
+
 ## 0.16.1 (protein IDs in the clade table)
 - First full run of 0.16.0 on Compara: 15,227 families with a human gene split into 20,121 clades; every multi-member family used its own recorded root
   (14,942), none needed reconciliation. Clades with exactly one human gene: 16,421 (13,093 from one-human families, 3,328 from split families, as clean
