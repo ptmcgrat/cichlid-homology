@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.0 (synteny in the gene table, ambiguous clades resolved, chromosome tables)
+- First real table (0.18.0, with positions): the 2,504 paired genes on different chromosomes fell on only 111 chromosome pairs, the largest carrying 129 to
+  220 pairs; 96% of the pairs sat on a chromosome pair holding at least 3 other pairs (published pairs 98%, pairs with no published support 94%), and 191 of
+  the 227 low-confidence pairs on a chromosome pair with 5 or more others: the signature of the teleost genome duplication, which the confidence had not used.
+- New column `ev_synteny`: the number of OTHER firm pairs (status paired, high or medium before synteny, different chromosomes) on the pair's chromosome pair.
+  The confidence now counts four signals (lineages, chromosomes, zebrafish split, synteny of at least `synteny_min_pairs` = 5); against: same lineage, tandem
+  copies, a chromosome pair no other pair shares. High: three or more and none against; medium: two and none against, or three with one against; low: otherwise.
+- A possible pair (1:1 clade, two focal genes) on a supported chromosome pair is now `pair retained in few teleosts (synteny-supported)`.
+- Ambiguous clades (1:2 clade, three or more focal genes): a gene is paired with the gene in the other lineage on a partner chromosome (a chromosome pair with
+  at least 5 firm pairs) when each is the other's only candidate: `paired (resolved by synteny)` (its confidence does not count synteny again); otherwise the
+  candidates are listed in the new column `ohnolog_candidates`, and a gene with none is `partner not found on a partner chromosome`. `ohnolog_lineage` is now
+  filled for every gene of a 1:2 clade.
+- `gene-table --positions` also writes `chromosome_pairs.<species>.tsv` (per chromosome pair: pairs by kind and confidence, shares of each chromosome's pairs,
+  mutual top partners) and `chromosomes.<species>.tsv` (genes, genes in pairs, top partner, partner chromosomes with 5 or more pairs). 68 columns. 189 offline tests.
+
 ## 0.18.0 (the gene table)
 - New read-only command `cichlid-homology gene-table`: one row per focal-species gene, 66 columns in 11 groups (identity; family and clade; closest human gene;
   closest zebrafish gene; teleost trend and relationships; human-side cleanliness; B1 call; ohnolog; later duplicates and out-paralogs; flags; provenance),

@@ -1,4 +1,4 @@
-from cichlid_homology.genetable import COLUMNS, COLUMN_SPEC, build_gene_table, columns_markdown, human_tier, summarize_table
+from cichlid_homology.genetable import COLUMNS, COLUMN_SPEC, build_gene_table, chromosome_tables, columns_markdown, human_tier, summarize_table
 
 
 def clade(fam="F1", grp="G1", human="H1", zfish="Z1;Z2", trend="1:2", med=2, early=2, perc=2, nh=None, nz=None, tel=30, tet=11, share=1.0, rate=0.95, tshare=1.0):
@@ -27,8 +27,9 @@ def table(rows, groups, **kw):
     return {r["gene_id"]: r for r in build_gene_table(rows, kw.pop("treefam", []), groups, FAM, version="9.9", run_date="d", **kw)}
 
 
-def test_the_table_has_66_documented_columns_in_order():
-    assert len(COLUMNS) == len(COLUMN_SPEC) == 66 and COLUMNS[0] == "gene_id" and COLUMNS[-1] == "parameters"
+def test_the_table_has_68_documented_columns_in_order():
+    assert len(COLUMNS) == len(COLUMN_SPEC) == 68 and COLUMNS[0] == "gene_id" and COLUMNS[-1] == "parameters"
+    assert COLUMNS.index("ev_synteny") == COLUMNS.index("ev_zebrafish_split") + 1
     assert "## Ohnolog" in columns_markdown()
 
 
@@ -152,3 +153,95 @@ def test_a_possible_pair_in_a_1_to_1_clade_has_the_same_status_for_both_genes():
     assert one_sided["a"]["ohnolog_gene"] == "b" and one_sided["b"]["ohnolog_gene"] == "a"
     tandem = table([gene("a", near="b", cls="tandem_near"), gene("b", near="x", cls="different_seqid")], [c])
     assert tandem["a"]["ohnolog_status"] == tandem["b"]["ohnolog_status"] == "later duplicate"
+
+
+def firm_pairs(n, ca="c1", cb="c2", first=0):
+    """n clades with a 1:2 trend, each with two focal genes on chromosomes ca and cb, in lineages A and B, matching two zebrafish genes."""
+    genes, groups, pos = [], [], {}
+    for i in range(first, first + n):
+        fam = f"S{i}"
+        groups.append(clade(fam=fam, human=f"H{i}", zfish=f"Za{i};Zb{i}"))
+        genes += [gene(f"a{i}", fam=fam, z=f"Za{i}", h=f"H{i}", lineage="A"), gene(f"b{i}", fam=fam, z=f"Zb{i}", h=f"H{i}", lineage="B")]
+        pos[f"a{i}"], pos[f"b{i}"] = (ca, i * 100, i), (cb, i * 100, i)
+    return genes, groups, pos
+
+
+def test_synteny_counts_the_other_pairs_on_the_chromosome_pair_and_lifts_a_weak_pair():
+    genes, groups, pos = firm_pairs(7)
+    # a weak pair: lineages unassigned and the same closest zebrafish gene, but on the same chromosome pair
+    groups.append(clade(fam="W", human="HW", zfish="Zw"))
+    genes += [gene("wa", fam="W", z="Zw", h="HW", lineage=""), gene("wb", fam="W", z="Zw", h="HW", lineage="")]
+    pos["wa"], pos["wb"] = ("c1", 5000, 70), ("c2", 5000, 70)
+    t = table(genes, groups, positions=pos)
+    assert (t["a0"]["ev_synteny"], t["a0"]["ohnolog_confidence"]) == (6, "high")
+    assert (t["wa"]["ev_synteny"], t["wa"]["ohnolog_confidence"], t["wb"]["ohnolog_confidence"]) == (7, "medium", "medium")   # one signal before; with synteny two
+    no_pos = table(genes, groups)                                                                                          # without positions nothing changes
+    assert no_pos["wa"]["ev_synteny"] == "" and no_pos["wa"]["ohnolog_confidence"] == "low"
+
+
+def test_an_isolated_pair_and_a_pair_on_one_chromosome_have_no_supporting_synteny():
+    genes, groups, pos = firm_pairs(1, "c8", "c9")
+    t = table(genes, groups, positions=pos)
+    assert (t["a0"]["ev_synteny"], t["a0"]["ohnolog_confidence"]) == (0, "medium")        # lineages, chromosomes and the zebrafish split, but alone: one against
+    same = table(genes, groups, positions={**pos, "b0": ("c8", 150, 1)})
+    assert same["a0"]["ev_synteny"] == "" and same["a0"]["ev_position"] in ("tandem", "same chromosome, distant")
+
+
+def test_a_possible_pair_on_a_supported_chromosome_pair_is_a_pair_retained_in_few_teleosts():
+    genes, groups, pos = firm_pairs(6)
+    c = clade(fam="P1", human="HP1", zfish="Zp1", trend="1:1", med=1)
+    genes += [gene("pa", fam="P1", z="Zp1", h="HP1", lineage="A"), gene("pb", fam="P1", z="Zp1", h="HP1", lineage="B")]
+    pos["pa"], pos["pb"] = ("c1", 9000, 90), ("c2", 9000, 90)
+    far = clade(fam="P2", human="HP2", zfish="Zp2", trend="1:1", med=1)
+    genes += [gene("qa", fam="P2", z="Zp2", h="HP2", lineage="A"), gene("qb", fam="P2", z="Zp2", h="HP2", lineage="B")]
+    pos["qa"], pos["qb"] = ("c8", 9000, 90), ("c9", 9000, 90)
+    t = table(genes, groups + [c, far], positions=pos)
+    assert t["pa"]["ohnolog_status"] == t["pb"]["ohnolog_status"] == "pair retained in few teleosts (synteny-supported)"
+    assert t["qa"]["ohnolog_status"] == "possible pair (the other teleosts lost a copy)" and t["qa"]["ev_synteny"] == 0
+
+
+def test_an_ambiguous_clade_is_resolved_when_the_partner_chromosome_has_one_gene_in_the_other_lineage():
+    genes, groups, pos = firm_pairs(6)
+    groups.append(clade(fam="X1", human="HX1", zfish="Zx1;Zx2;Zx3"))
+    genes += [gene("g1", fam="X1", z="Zx1", h="HX1", lineage="A"), gene("g2", fam="X1", z="Zx2", h="HX1", lineage="B"), gene("g3", fam="X1", z="Zx3", h="HX1", lineage="B")]
+    pos.update({"g1": ("c1", 8000, 80), "g2": ("c2", 8000, 80), "g3": ("c5", 8000, 80)})
+    t = table(genes, groups, positions=pos)
+    assert t["g1"]["ohnolog_status"] == t["g2"]["ohnolog_status"] == "paired (resolved by synteny)"
+    assert (t["g1"]["ohnolog_gene"], t["g2"]["ohnolog_gene"], t["g1"]["pair_id"] == t["g2"]["pair_id"] == "X1:G1:S1") == ("g2", "g1", True)
+    assert t["g1"]["ohnolog_confidence"] == t["g2"]["ohnolog_confidence"] and t["g1"]["ev_synteny"] == 6
+    assert (t["g3"]["ohnolog_status"], t["g3"]["ohnolog_gene"]) == ("partner not found on a partner chromosome", "")
+
+
+def test_tandem_copies_on_the_partner_chromosome_leave_the_clade_ambiguous_and_list_the_candidates():
+    genes, groups, pos = firm_pairs(6)
+    groups.append(clade(fam="X2", human="HX2", zfish="Zy1;Zy2;Zy3"))
+    genes += [gene("h1", fam="X2", z="Zy1", h="HX2", lineage="A"), gene("h2", fam="X2", z="Zy2", h="HX2", lineage="B"), gene("h3", fam="X2", z="Zy3", h="HX2", lineage="B")]
+    pos.update({"h1": ("c1", 7000, 70), "h2": ("c2", 7000, 70), "h3": ("c2", 7100, 71)})
+    t = table(genes, groups, positions=pos)
+    assert t["h1"]["ohnolog_status"] == "partner ambiguous (three or more focal genes)" and t["h1"]["ohnolog_candidates"] == "h2;h3"
+    assert t["h2"]["ohnolog_gene"] == "" and t["h2"]["ohnolog_candidates"] == "h1"
+
+
+def test_the_chromosome_tables_count_pairs_per_chromosome_pair_and_per_chromosome():
+    genes, groups, pos = firm_pairs(6)
+    groups.append(clade(fam="X1", human="HX1", zfish="Zx1;Zx2;Zx3"))
+    genes += [gene("g1", fam="X1", z="Zx1", h="HX1", lineage="A"), gene("g2", fam="X1", z="Zx2", h="HX1", lineage="B"), gene("g3", fam="X1", z="Zx3", h="HX1", lineage="B")]
+    pos.update({"g1": ("c1", 8000, 80), "g2": ("c2", 8000, 80), "g3": ("c5", 8000, 80)})
+    rows = build_gene_table(genes, [], groups, FAM, version="9", positions=pos)
+    for r in rows:
+        r["seqid"], r["start"], r["gene_index"] = pos[r["gene_id"]]
+    cp, ch = chromosome_tables(rows)
+    top = cp[0]
+    assert (top["seqid_a"], top["seqid_b"], top["pairs_total"], top["paired"], top["paired_high"], top["resolved_by_synteny"], top["mutual_top_partners"]) == ("c1", "c2", 7, 6, 6, 1, "yes")
+    c1 = {r["seqid"]: r for r in ch}["c1"]
+    assert (c1["top_partner"], c1["top_partner_pairs"], c1["pairs_with_another_chromosome"], c1["share_to_top_partner"], c1["partner_chromosomes_with_5_or_more_pairs"]) == ("c2", 7, 7, 1.0, 1)
+    assert {r["seqid"]: r["genes"] for r in ch}["c5"] == 1
+
+
+def test_the_summary_counts_resolved_pairs_with_the_paired_genes():
+    genes, groups, pos = firm_pairs(6)
+    groups.append(clade(fam="X1", human="HX1", zfish="Zx1;Zx2;Zx3"))
+    genes += [gene("g1", fam="X1", z="Zx1", h="HX1", lineage="A"), gene("g2", fam="X1", z="Zx2", h="HX1", lineage="B"), gene("g3", fam="X1", z="Zx3", h="HX1", lineage="B")]
+    pos.update({"g1": ("c1", 8000, 80), "g2": ("c2", 8000, 80), "g3": ("c5", 8000, 80)})
+    s = summarize_table(build_gene_table(genes, [], groups, FAM, version="9", positions=pos))
+    assert s["ohnolog_status"]["paired (resolved by synteny)"] == 2 and sum(s["pair_confidence"].values()) == 14

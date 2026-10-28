@@ -13,9 +13,18 @@ which is compared with the trend in `copy_vs_trend`.
 Ohnolog (the other copy of the teleost genome duplication): in a clade with a 1:2 trend and exactly two focal genes they are a pair; with one, the
 partner was lost in the focal species (the zebrafish genes in the clade are listed); with three or more, the partner is ambiguous until the trees
 order our own genes (OrthoFinder). In a 1:1 clade with two focal genes on different chromosomes the pair is possible (the other teleosts lost a
-copy, the focal species kept it); tandem copies are a later duplicate. A pair's confidence counts three independent signals: the two genes sit in
-different lineages of the duplication, on different chromosomes, and match two different zebrafish genes (high: all three; medium: two and none
-against; low: otherwise). Published pairs are an outside check, not part of the call."""
+copy, the focal species kept it); tandem copies are a later duplicate. A pair's confidence counts four independent signals: the two genes sit in
+different lineages of the duplication, on different chromosomes, match two different zebrafish genes, and their chromosome pair carries many other
+pairs (synteny: the teleost genome duplication made each ancestral chromosome into two). Against a pair count the same lineage, tandem copies and a
+chromosome pair no other pair shares. High: three or more signals and none against; medium: two and none against, or three with one against; low:
+otherwise. Published pairs are an outside check, not part of the call.
+
+Synteny (0.19): the chromosome pairs of the firm pairs (status paired, high or medium before synteny, on different chromosomes) are counted; in the
+first real table the 2,504 paired genes on different chromosomes fell on only 111 chromosome pairs, the biggest holding 129 to 220 pairs. A pair's
+`ev_synteny` is the number of OTHER firm pairs on its chromosome pair. In a 1:2 clade with three or more focal genes a gene is paired with the gene in
+another lineage on a partner chromosome (a chromosome pair holding at least `synteny_min_pairs` firm pairs) when each is the other's only candidate;
+otherwise the candidates are listed. A possible pair (1:1 clade, two genes) on such a chromosome pair is a pair retained in few teleosts.
+`chromosome_tables` gives the chromosome pairs and a summary per chromosome."""
 from __future__ import annotations
 
 import collections
@@ -66,18 +75,20 @@ COLUMN_SPEC = [
     ("vote_parsimony", "B1 call", "the parsimony call's vote"),
     ("vote_tree", "B1 call", "the gene-tree call's vote"),
     ("tree_call", "B1 call", "the gene-tree call"),
-    ("ohnolog_status", "Ohnolog", "paired; possible pair; partner lost in the focal species; partner ambiguous; single copy (duplicate lost); later duplicate; expansion; mixed trend; not applicable"),
+    ("ohnolog_status", "Ohnolog", "paired; paired (resolved by synteny); pair retained in few teleosts (synteny-supported); possible pair; partner lost in the focal species; partner ambiguous; partner not found on a partner chromosome; single copy (duplicate lost); later duplicate; expansion; mixed trend; not applicable"),
     ("pair_id", "Ohnolog", "shared by the two genes of a pair"),
     ("ohnolog_gene", "Ohnolog", "the partner's gene ID"),
     ("ohnolog_symbol", "Ohnolog", "the partner's symbol"),
     ("ohnolog_lineage", "Ohnolog", "this gene's lineage (A or B) in the duplication"),
-    ("ohnolog_confidence", "Ohnolog", "high, medium or low, from the three signals below"),
+    ("ohnolog_confidence", "Ohnolog", "high, medium or low, from the four signals below (lineages, chromosomes, zebrafish split, synteny)"),
     ("ev_lineages", "Ohnolog", "the two genes sit in different lineages of the duplication: different, same, unassigned"),
     ("ev_position", "Ohnolog", "different chromosomes, tandem, same chromosome distant, or unknown"),
     ("ev_zebrafish_split", "Ohnolog", "the two genes match two different zebrafish genes: yes, no, unknown"),
+    ("ev_synteny", "Ohnolog", "other firm pairs on the same chromosome pair (blank for pairs on one chromosome)"),
     ("ohnolog_zebrafish_gene", "Ohnolog", "the zebrafish gene matching the partner"),
     ("published_pair", "Ohnolog", "the two zebrafish names are a published pair, or the gene is in a published pair in n of 4 species (outside check)"),
     ("partner_elsewhere", "Ohnolog", "when the partner was lost in the focal species: the other zebrafish gene(s) in the clade"),
+    ("ohnolog_candidates", "Ohnolog", "when the partner is ambiguous: the focal genes of the clade on a partner chromosome, in another lineage"),
     ("later_dup_level", "Later duplicates and out-paralogs", "teleost, percomorph or ovalentarian level of a later duplicate before the cichlids"),
     ("nearest_copy_gene", "Later duplicates and out-paralogs", "the nearest other focal copy"),
     ("nearest_copy_class", "Later duplicates and out-paralogs", "tandem adjacent, tandem near, same chromosome distant, different chromosome"),
@@ -93,7 +104,7 @@ COLUMN_SPEC = [
     ("parameters", "Provenance", "the settings used"),
 ]
 COLUMNS = [c for c, _, _ in COLUMN_SPEC]
-DEFAULTS = {"strict": {"single": 0.9, "tetrapod_species": 10, "rate": (0.8, 1.2), "teleost_share": 0.9},
+DEFAULTS = {"synteny_min_pairs": 5, "strict": {"single": 0.9, "tetrapod_species": 10, "rate": (0.8, 1.2), "teleost_share": 0.9},
             "loose": {"single": 0.7, "tetrapod_species": 5, "rate": (0.7, 1.3), "teleost_share": 0.8}, "tandem_gap_genes": 10}
 POS_OF_CLASS = {"different_seqid": "different chromosomes", "tandem_adjacent": "tandem", "tandem_near": "tandem", "same_seqid_distant": "same chromosome, distant"}
 
@@ -155,8 +166,8 @@ def human_tier(c, p=DEFAULTS) -> str:
     return "clean" if ok(p["strict"]) else ("acceptable" if ok(p["loose"]) else "messy")
 
 
-def _pair_evidence(a, b, positions, params):
-    """(lineages, position, zebrafish split, confidence) of the pair of genes a and b, the same whichever gene is asked about."""
+def _signals(a, b, positions, params):
+    """(lineages, position, zebrafish split) of the pair of genes a and b, the same whichever gene is asked about."""
     la, lb = a.get("d_gene_lineage"), b.get("d_gene_lineage")
     lin = "unassigned" if not (la in ("A", "B") and lb in ("A", "B")) else ("different" if la != lb else "same")
     pa, pb = (positions or {}).get(a["gene_id"]), (positions or {}).get(b["gene_id"])
@@ -173,10 +184,159 @@ def _pair_evidence(a, b, positions, params):
     else:
         pos = "unknown"
     za, zb = a.get("a_zebrafish_best"), b.get("a_zebrafish_best")
-    zs = "unknown" if not (za and zb) else ("yes" if za != zb else "no")
-    plus = [lin == "different", pos == "different chromosomes", zs == "yes"]
-    minus = [lin == "same", pos == "tandem"]
-    return lin, pos, zs, ("high" if all(plus) else ("medium" if sum(plus) >= 2 and not any(minus) else "low"))
+    return lin, pos, "unknown" if not (za and zb) else ("yes" if za != zb else "no")
+
+
+def _confidence(lin, pos, zs, syn, min_pairs=5):
+    """high / medium / low from the signals for a pair; `syn` is the number of other firm pairs on the chromosome pair, or "" when it is not used."""
+    plus = [lin == "different", pos == "different chromosomes", zs == "yes", syn != "" and syn >= min_pairs]
+    minus = [lin == "same", pos == "tandem", pos == "different chromosomes" and syn == 0]
+    p, m = sum(plus), sum(minus)
+    if m == 0 and p >= 3:
+        return "high"
+    if (m == 0 and p >= 2) or (m == 1 and p >= 3):
+        return "medium"
+    return "low"
+
+
+def _pair_evidence(a, b, positions, params):
+    lin, pos, zs = _signals(a, b, positions, params)
+    return lin, pos, zs, _confidence(lin, pos, zs, "", params.get("synteny_min_pairs", 5))
+
+
+def _published_text(r, pr_r, pub):
+    sa, sb = (r.get("a_zebrafish_best_symbol") or "").lower(), ((pr_r or {}).get("a_zebrafish_best_symbol") or "").lower()
+    if sa and sb and sb in pub.get(sa, ()):
+        return "the two zebrafish names are a published pair"
+    n = _i(r.get("t_pairs_relaxed_n"))
+    return f"gene in a published pair in {n} of 4 species" if n >= 1 else ""
+
+
+PAIRISH = ("paired", "possible pair (the other teleosts lost a copy)")
+SYN_POSSIBLE = "pair retained in few teleosts (synteny-supported)"
+SYN_RESOLVED = "paired (resolved by synteny)"
+
+
+def _chrom(positions, g):
+    return (positions.get(g) or ("",))[0]
+
+
+def _synteny_pass(out, meta, positions, params, pub):
+    """Counts the chromosome pairs of the firm pairs, gives each pair its synteny count and a four-signal confidence, upgrades the possible pairs on a
+    supported chromosome pair, and resolves the ambiguous clades. Returns the chromosome-pair counter."""
+    minp = params.get("synteny_min_pairs", 5)
+    pairs = collections.defaultdict(list)
+    for o in out:
+        if o["ohnolog_status"] in PAIRISH and o["ohnolog_gene"]:
+            pairs[frozenset((o["gene_id"], o["ohnolog_gene"]))].append(o)
+    cp, firm = collections.Counter(), set()
+    for key, os_ in pairs.items():
+        o = os_[0]
+        if o["ohnolog_status"] == "paired" and o["ev_position"] == "different chromosomes" and o["ohnolog_confidence"] in ("high", "medium"):
+            a, b = tuple(key)
+            cp[tuple(sorted((_chrom(positions, a), _chrom(positions, b))))] += 1
+            firm.add(key)
+    for key, os_ in pairs.items():
+        a, b = tuple(key)
+        syn = ""
+        if os_[0]["ev_position"] == "different chromosomes":
+            syn = cp[tuple(sorted((_chrom(positions, a), _chrom(positions, b))))] - (1 if key in firm else 0)
+        for o in os_:
+            o["ev_synteny"] = syn
+            o["ohnolog_confidence"] = _confidence(o["ev_lineages"], o["ev_position"], o["ev_zebrafish_split"], syn, minp)
+            if o["ohnolog_status"] == PAIRISH[1] and syn != "" and syn >= minp:
+                o["ohnolog_status"] = SYN_POSSIBLE
+    amb = collections.defaultdict(list)
+    for o in out:
+        if o["ohnolog_status"] == "partner ambiguous (three or more focal genes)" and o["clade_id"]:
+            amb[o["clade_id"]].append(o)
+    for cid, os_ in amb.items():
+        lin = {o["gene_id"]: meta[o["gene_id"]].get("d_gene_lineage") for o in os_}
+        cand = {}
+        for g in os_:
+            gid, cg, c = g["gene_id"], _chrom(positions, g["gene_id"]), []
+            for h in os_:
+                hid, ch = h["gene_id"], _chrom(positions, h["gene_id"])
+                if hid == gid or not cg or not ch or cg == ch or (lin[gid] in ("A", "B") and lin[hid] == lin[gid]):
+                    continue
+                if cp.get(tuple(sorted((cg, ch))), 0) >= minp:
+                    c.append(hid)
+            cand[gid] = c
+        byg = {g["gene_id"]: g for g in os_}
+        k = 0
+        for g in os_:
+            gid, c = g["gene_id"], cand[g["gene_id"]]
+            if len(c) == 1 and cand[c[0]] == [gid]:
+                if gid < c[0]:
+                    k += 1
+                    ra, rb = meta[gid], meta[c[0]]
+                    lin_, pos_, zs_ = _signals(ra, rb, positions, params)
+                    conf = _confidence(lin_, pos_, zs_, "", minp)               # synteny chose the partner, so it is not counted again
+                    syn = cp.get(tuple(sorted((_chrom(positions, gid), _chrom(positions, c[0])))), 0)
+                    for x, y in ((byg[gid], byg[c[0]]), (byg[c[0]], byg[gid])):
+                        x.update(ohnolog_status=SYN_RESOLVED, pair_id=f"{cid}:S{k}", ohnolog_gene=y["gene_id"], ohnolog_symbol=y["symbol"],
+                                 ev_lineages=lin_, ev_position=pos_, ev_zebrafish_split=zs_, ev_synteny=syn, ohnolog_confidence=conf,
+                                 ohnolog_zebrafish_gene=meta[y["gene_id"]].get("a_zebrafish_best") or "", ohnolog_candidates="",
+                                 published_pair=_published_text(meta[x["gene_id"]], meta[y["gene_id"]], pub))
+            elif c:
+                g["ohnolog_candidates"] = ";".join(c)
+            else:
+                g["ohnolog_status"] = "partner not found on a partner chromosome"
+    return cp
+
+
+def chromosome_tables(out, positions=None):
+    """(chromosome pairs, chromosomes): pair counts per chromosome pair by kind and confidence, and per chromosome the genes, the genes in pairs and the
+    top partner chromosome. Pairs of one chromosome (tandem or distant) are counted per chromosome only."""
+    kind = {"paired": "paired", SYN_RESOLVED: "resolved_by_synteny", SYN_POSSIBLE: "few_teleosts_supported", PAIRISH[1]: "possible"}
+    cps, same = collections.defaultdict(collections.Counter), collections.Counter()
+    byid = {o["gene_id"]: o for o in out}
+    seen = set()
+    for o in out:
+        if o["ohnolog_status"] in kind and o["ohnolog_gene"] and o["seqid"]:
+            key = frozenset((o["gene_id"], o["ohnolog_gene"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            q = byid.get(o["ohnolog_gene"])
+            if not q or not q["seqid"]:
+                continue
+            if o["seqid"] == q["seqid"]:
+                same[o["seqid"]] += 1
+                continue
+            ck = tuple(sorted((o["seqid"], q["seqid"])))
+            c = cps[ck]
+            c["pairs_total"] += 1
+            c[kind[o["ohnolog_status"]]] += 1
+            if o["ohnolog_status"] == "paired":
+                c[f"paired_{o['ohnolog_confidence']}"] += 1
+    tot = collections.Counter()
+    top = {}
+    for (a, b), c in cps.items():
+        tot[a] += c["pairs_total"]
+        tot[b] += c["pairs_total"]
+    for (a, b), c in cps.items():
+        for x, y in ((a, b), (b, a)):
+            if c["pairs_total"] > top.get(x, ("", 0))[1]:
+                top[x] = (y, c["pairs_total"])
+    pair_rows = []
+    for (a, b), c in sorted(cps.items(), key=lambda kv: -kv[1]["pairs_total"]):
+        pair_rows.append({"seqid_a": a, "seqid_b": b, "pairs_total": c["pairs_total"], "paired": c["paired"], "paired_high": c["paired_high"],
+                          "paired_medium": c["paired_medium"], "paired_low": c["paired_low"], "resolved_by_synteny": c["resolved_by_synteny"],
+                          "few_teleosts_supported": c["few_teleosts_supported"], "possible": c["possible"],
+                          "share_of_a": round(c["pairs_total"] / tot[a], 3), "share_of_b": round(c["pairs_total"] / tot[b], 3),
+                          "mutual_top_partners": "yes" if top[a][0] == b and top[b][0] == a else "no"})
+    n_genes, n_pair = collections.Counter(o["seqid"] for o in out if o["seqid"]), collections.Counter()
+    for o in out:
+        if o["ohnolog_status"] in kind and o["ohnolog_gene"] and o["seqid"]:
+            n_pair[o["seqid"]] += 1
+    chrom_rows = []
+    for sq in sorted(n_genes, key=lambda x: -tot.get(x, 0)):
+        partners = [c for (a, b), c in cps.items() if sq in (a, b) and c["pairs_total"] >= 5]
+        chrom_rows.append({"seqid": sq, "genes": n_genes[sq], "genes_in_pairs": n_pair[sq], "pairs_with_another_chromosome": tot.get(sq, 0),
+                           "pairs_within_the_chromosome": same.get(sq, 0), "top_partner": top.get(sq, ("", 0))[0], "top_partner_pairs": top.get(sq, ("", 0))[1],
+                           "share_to_top_partner": round(top[sq][1] / tot[sq], 3) if sq in top and tot[sq] else "", "partner_chromosomes_with_5_or_more_pairs": len(partners)})
+    return pair_rows, chrom_rows
 
 
 def _clade_type(c, fam_human):
@@ -295,7 +455,7 @@ def build_gene_table(compara, treefam, groups, families, partners=None, position
         elif trend in ("mixed 1-2", "mixed 2-3"):
             st = "mixed trend"
         o["ohnolog_status"] = st
-        o["ohnolog_lineage"] = r.get("d_gene_lineage", "") if st in ("paired", "possible pair (the other teleosts lost a copy)") else ""
+        o["ohnolog_lineage"] = r.get("d_gene_lineage", "") if (trend == "1:2" or st in PAIRISH) and r.get("d_gene_lineage") in ("A", "B") else ""
         pr = partner_of.get(gid)
         if pr and st in ("paired", "possible pair (the other teleosts lost a copy)"):
             pr_r = pr["_r"]
@@ -307,17 +467,15 @@ def build_gene_table(compara, treefam, groups, families, partners=None, position
                 pair_cache[frozenset((gid, pr_r["gene_id"]))] = ev
             o["ev_lineages"], o["ev_position"], o["ev_zebrafish_split"], o["ohnolog_confidence"] = ev
             o["ohnolog_zebrafish_gene"] = pr_r.get("a_zebrafish_best") or ""
-            sa, sb = (r.get("a_zebrafish_best_symbol") or "").lower(), (pr_r.get("a_zebrafish_best_symbol") or "").lower()
-            if sa and sb and sb in pub.get(sa, ()):
-                o["published_pair"] = "the two zebrafish names are a published pair"
-            elif _i(r.get("t_pairs_relaxed_n")) >= 1:
-                o["published_pair"] = f"gene in a published pair in {_i(r.get('t_pairs_relaxed_n'))} of 4 species"
-        elif _i(r.get("t_pairs_relaxed_n")) >= 1:
-            o["published_pair"] = f"gene in a published pair in {_i(r.get('t_pairs_relaxed_n'))} of 4 species"
+            o["published_pair"] = _published_text(r, pr_r, pub)
+        else:
+            o["published_pair"] = _published_text(r, None, pub)
         if st == "partner lost in the focal species":
             z = [p for p in c["zebrafish_proteins"].split(";") if p and p != r.get("a_zebrafish_best")]
             o["partner_elsewhere"] = ";".join(z)
         out.append(o)
+    if positions:
+        _synteny_pass(out, {x["_r"]["gene_id"]: x["_r"] for x in rows}, positions, params, pub)
     return out
 
 
@@ -325,7 +483,7 @@ def summarize_table(rows) -> dict:
     C = collections.Counter
     return {"genes": len(rows), "clade_assignment": dict(C(r["clade_assignment"] for r in rows)),
             "ohnolog_status": dict(C(r["ohnolog_status"] for r in rows).most_common()),
-            "pair_confidence": dict(C(r["ohnolog_confidence"] for r in rows if r["ohnolog_status"] == "paired")),
+            "pair_confidence": dict(C(r["ohnolog_confidence"] for r in rows if r["ohnolog_status"] in ("paired", SYN_RESOLVED))),
             "rel_human": dict(C(r["rel_human"] for r in rows).most_common(8)), "rel_zebrafish": dict(C(r["rel_zebrafish"] for r in rows).most_common(8)),
             "copy_vs_trend": dict(C(r["copy_vs_trend"] for r in rows)), "human_clean_tier": dict(C(r["human_clean_tier"] for r in rows)),
             "b1_category": dict(C(r["b1_category"] for r in rows).most_common()), "out_paralog": dict(C(r["out_paralog"] for r in rows))}

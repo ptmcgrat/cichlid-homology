@@ -240,6 +240,15 @@ def _gene_table(args) -> int:
         w.writerows(rows)
     summ = GT.summarize_table(rows)
     summ["cichlid_homology"] = __version__
+    if positions:                                                    # the chromosome pairs need the positions
+        cp, ch = GT.chromosome_tables(rows)
+        for name, tab in (("chromosome_pairs", cp), ("chromosomes", ch)):
+            if tab:
+                with open(out / f"{name}.{args.species}.tsv", "w", newline="") as fh:
+                    w = csv.DictWriter(fh, fieldnames=list(tab[0]), delimiter="\t")
+                    w.writeheader()
+                    w.writerows(tab)
+        summ["chromosome_pairs"] = len(cp)
     (out / f"gene_table.{args.species}.json").write_text(json.dumps(summ, indent=1))
     (out / "gene_table_columns.md").write_text(GT.columns_markdown())
     print(json.dumps(summ, indent=1))
@@ -377,7 +386,7 @@ def main(argv=None) -> int:
     gt.add_argument("--clades", required=True, help="clade_split.Compara.groups.tsv")
     gt.add_argument("--clade-families", required=True, help="clade_split.Compara.families.tsv")
     gt.add_argument("--ohnologs", default=None, help="folder of OHNOLOGS v2 3R pair files (the published-pair check)")
-    gt.add_argument("--positions", action="store_true", help="read seqid, start and gene order from the genome annotation (through the layout)")
+    gt.add_argument("--positions", action="store_true", help="read seqid, start and gene order from the genome annotation (through the layout); needed for the synteny signal and the chromosome tables")
     gt.add_argument("--species", default="Mzeb")
     gt.add_argument("--reassign", action="store_true", help="recompute the B1 categories from an older pilot table with the current logic")
     gt.add_argument("--out", default=None, help="default: ~/share/gene_table_<version>_<timestamp>")

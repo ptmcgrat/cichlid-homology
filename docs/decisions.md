@@ -185,3 +185,11 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - The human-side cleanliness tiers use the cutoffs tried on the first clade tables (strict: 0.9 single-copy share, 10 tetrapod species, rate 0.8-1.2, clade holds 90% of the
   family's teleosts; loose: 0.7, 5, 0.7-1.3, 80%); they are recorded in the `parameters` column and are the owner's to change.
 - Deviation from the proposed columns: `symbol_check` is two columns (human and zebrafish); `published_pair` is one text column.
+
+
+## 0.19.0: synteny
+- Owner decision: add synteny as a fourth signal and use it to resolve ambiguous clades, and give the chromosome-pair map as a table.
+- The firm pairs that build the map are the paired genes (1:2 clade, exactly two focal genes) on different chromosomes with high or medium confidence from the
+  other three signals, so a pair does not vouch for itself: its synteny counts the other pairs only. The support cutoff (5 other pairs) was read off the first real
+  table, where chromosome pairs hold 1 to 220 pairs and 96% of pairs share a chromosome pair with at least 3 others.
+- The chromosome names are the annotation's accessions (for example NC_135171.1); mapping them to linkage groups is for the owner or the coordinator.
