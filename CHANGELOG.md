@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.16.0 (clades of the reference families, split at their ancient duplications)
+- New read-only command `cichlid-homology clade-split --part Compara`: for every reference family with a human gene (`--all-families` for the rest),
+  root the tree (the tree's own root when it has two children, else by reconciliation with the master species tree; `--rooting reconcile` always
+  reconciles), find the ancient duplications and cut there, and score each clade left: a duplication is ancient when it is a reconciliation
+  duplication whose two largest children share at least `--pair-overlap` (0.5) of their species, tetrapods lie below it, and either teleosts do
+  too or its species-tree node is the amniote ancestor or older (a paralog lost in every fish is still cut). Duplications younger inside the
+  tetrapods (human-specific duplicates) or inside the teleosts only (the teleost genome duplication) are not cut but counted.
+- Per clade: human genes; tetrapod species, genes, mean genes per species and the share of tetrapod species with exactly one gene; teleost species,
+  mean genes per species and the share of the family's teleost species in the clade; gar and reedfish; supported duplications inside it (tetrapod
+  clade, tetrapod species, teleost clade, mixed); root-to-tip distances of the tetrapods from the clade's root (median, spread) and the human
+  distance relative to the other tetrapods (with at least three of them). Tetrapods are the sarcopterygians without the coelacanth. No cutoffs.
+- Outputs: `clade_split.<part>.families.tsv`, `.groups.tsv`, a JSON summary and a report (clades per family by number of human genes; profiles of the
+  clades with exactly one and two human genes, split by whether the family itself has one human gene; examples of families with four). 165 offline tests.
+
 ## 0.15.0 (mean genes per species, by number of human genes)
 - The family survey now counts tetrapod leaves and species (`n_tetrapod_leaves`, `n_tetrapod_species`: the sarcopterygians without the
   coelacanth) and reports, for families with exactly 1 and exactly 2 human genes, the distribution of the mean number of genes per species

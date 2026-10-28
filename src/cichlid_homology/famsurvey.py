@@ -17,7 +17,8 @@ from .read import leaf_names
 
 TELEOST_LEVELS = {"teleost", "percomorph", "ovalentaria", "cichlid"}
 NAMES = {"human": "homo_sapiens", "mouse": "mus_musculus", "zebrafish": "danio_rerio",       # canonical master-tree names
-         "gar_reed": {"lepisosteus_oculatus", "erpetoichthys_calabaricus"}, "coelacanth": "latimeria_chalumnae"}
+         "gar_reed": {"lepisosteus_oculatus", "erpetoichthys_calabaricus"}, "coelacanth": "latimeria_chalumnae",
+         "chicken": "gallus_gallus"}
 COLS = ["family", "tree_mode", "n_leaves", "n_species", "n_human", "n_mouse", "n_zebrafish", "n_gar_reedfish",
         "n_teleost_ref_leaves", "n_teleost_ref_species", "n_nonteleost_gnathostome_leaves", "n_sarcopterygian_leaves",
         "n_other_leaves", "n_unknown_leaves", "n_project_leaves", "has_focal_gene", "n_tetrapod_leaves", "n_tetrapod_species"]

@@ -168,6 +168,47 @@ def _family_survey(args) -> int:
     return 0
 
 
+def _clade_split(args) -> int:
+    """Split every reference family with a human gene at its ancient duplications and score each clade (read-only)."""
+    import csv
+
+    from cichlid_data import get_layout
+    from cichlid_data.clades import Clades
+
+    from . import cladesplit as C
+    from .master import load_species_tree
+    from .parsimony import ParsimonyContext
+    from .species import load_leaf_species
+
+    layout = get_layout()
+    clades, st = Clades.load(), load_species_tree()
+    if args.prepared:
+        prepared = Path(args.prepared).expanduser()
+    else:
+        fr = layout.family_resource("Compara116" if args.part == "Compara" else "TreeFam9")
+        prepared = Path(getattr(fr, "local", fr)) / "prepared"
+    print(f"reference trees under {prepared}; loading the leaf-to-species table ...", flush=True)
+    ls = load_leaf_species(layout, args.part)
+    fams, groups, errors, skipped = C.run_split(prepared, ls, st, clades, ParsimonyContext(st, clades), pair_overlap=args.pair_overlap,
+                                                only_human=not args.all_families, limit=args.limit, already_rooted=(args.rooting == "auto"),
+                                                progress=lambda i, n: print(f"  {i} families", flush=True))
+    out = Path(args.out).expanduser() if args.out else default_out("clade_split")
+    out.mkdir(parents=True, exist_ok=True)
+    for name, cols, rows in (("families", C.FAMILY_COLS, fams), ("groups", C.GROUP_COLS, groups)):
+        with open(out / f"clade_split.{args.part}.{name}.tsv", "w", newline="") as fh:
+            w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t")
+            w.writeheader()
+            w.writerows(rows)
+    summ = C.summarize_split(fams, groups, errors, skipped)
+    summ.update(cichlid_homology=__version__, part=args.part, pair_overlap=args.pair_overlap, rooting=args.rooting)
+    (out / f"clade_split.{args.part}.json").write_text(json.dumps(summ, indent=1, default=str))
+    text = C.report_split_text(summ, args.part)
+    (out / f"clade_split.{args.part}.md").write_text(text)
+    print(text)
+    print(f"\nwritten to {out}")
+    return 0
+
+
 def _pilot(args) -> int:
     from cichlid_data import Catalog, get_layout
     from cichlid_data.clades import Clades
@@ -292,6 +333,16 @@ def main(argv=None) -> int:
     s2.add_argument("--n-denovo", type=int, default=100)
     s2.add_argument("--out", default=None)
     s2.set_defaults(func=_survey2)
+    cs = sub.add_parser("clade-split", help="split the reference families at their ancient duplications and score each clade (read-only)")
+    cs.add_argument("--part", default="Compara", choices=["Compara", "TreeFam"])
+    cs.add_argument("--prepared", default=None, help="the prepared/ folder (default: from the layout)")
+    cs.add_argument("--rooting", default="auto", choices=["auto", "reconcile"],
+                    help="auto: keep a tree's own root when it has two children; reconcile: always root by reconciliation")
+    cs.add_argument("--pair-overlap", type=float, default=0.5, help="share of species two sides must have in common to be a duplication")
+    cs.add_argument("--all-families", action="store_true", help="also the families without a human gene (default: only those with one)")
+    cs.add_argument("--limit", type=int, default=0, help="only the first N families (a quick test)")
+    cs.add_argument("--out", default=None, help="default: ~/share/clade_split_<version>_<timestamp>")
+    cs.set_defaults(func=_clade_split)
     fs = sub.add_parser("family-survey", help="human, teleost and other genes in every finished family of a method (read-only)")
     fs.add_argument("--part", default="Compara", choices=["TreeFam", "Compara", "OrthoFinder"])
     fs.add_argument("--species", default="Mzeb", help="prefix of the focal species (marks the families that hold one of its genes)")

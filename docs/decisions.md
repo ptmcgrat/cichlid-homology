@@ -163,3 +163,12 @@ large clades (expanded families), and whether to tell the coordinator that the s
   them only 12 of 11,219 families with human genes had no reference teleost, which is a property of how the project selects families.
 - The pack says Compara splits some families into separate fish and tetrapod trees, hiding about 2,300 human orthologs per species: a
   gap on the human side that the reference survey can size.
+
+
+## 0.16.0: clades with a clean human side
+- Owner decisions: build the split of multi-human families by clade; "tetrapod" means all tetrapods (sarcopterygians without the coelacanth), not only mammals.
+- Criteria offered for "a human gene evolving reasonably" (none thresholded yet): copy-number stability in tetrapods (the share of tetrapod species with one
+  gene), coverage in teleosts, and a regular rate (no clade-level duplication inside the tetrapods, an even root-to-tip spread, the human branch not much
+  longer than the other tetrapods'). Cutoffs to be chosen from the data, e.g. by which clades give the best agreement of the B1 calls.
+- Known limit: reconciliation can root a family with the fish outside a tetrapod duplication when a paralog is missing in fish; the tree's own root is kept
+  by default when it has two children, and the `rooting` column says which was used. Compare `--rooting auto` and `reconcile` on real data.
