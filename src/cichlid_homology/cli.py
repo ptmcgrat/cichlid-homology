@@ -268,7 +268,15 @@ def _compare_tables(args) -> int:
     from . import compare as K
 
     res = K.compare_gene_tables(K.read(args.old), K.read(args.new))
-    clades = K.compare_clades(K.read(args.old_clades), K.read(args.new_clades)) if args.old_clades and args.new_clades else None
+    clades = None
+    if args.old_clades and args.new_clades:
+        oc, nc = K.read(args.old_clades), K.read(args.new_clades)
+        clades = K.compare_clades(oc, nc)
+        orows, nrows = K.read(args.old), K.read(args.new)
+        clades["old_gene_table_against_old_clades"], clades["new_gene_table_against_new_clades"] = K.clade_coverage(orows, oc), K.clade_coverage(nrows, nc)
+        for nm, cov in (("old", clades["old_gene_table_against_old_clades"]), ("new", clades["new_gene_table_against_new_clades"])):
+            if cov["not_in_the_clade_table"]:
+                res.setdefault("warnings", []).append(f"{cov['not_in_the_clade_table']} clade ids of the {nm} gene table are not in the {nm} clade table given: that table did not make this gene table.")
     out = Path(args.out).expanduser() if args.out else default_out("compare")
     K.write_outputs(out, res, clades)
     print(K.report_text({k: v for k, v in res.items() if k != "changed_genes"}, clades))

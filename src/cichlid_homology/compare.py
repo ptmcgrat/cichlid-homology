@@ -21,6 +21,9 @@ GROUPS = {
     "ohnolog": ["ohnolog_status", "ohnolog_gene", "ohnolog_confidence", "ev_lineages", "ev_synteny"],
 }
 HEADLINE = ["b1_category", "tree_call", "ohnolog_status", "ohnolog_gene", "teleost_trend", "rel_human", "rel_zebrafish", "clade_type", "out_paralog", "later_dup_level"]
+# calls that do not depend on the clade table (the pilot), and calls built on it (the clade split and the gene table)
+PILOT_CALLS = ["b1_category", "tree_call", "later_dup_level", "human_gene", "zebrafish_gene"]
+CLADE_CALLS = ["ohnolog_status", "ohnolog_gene", "teleost_trend", "rel_human", "rel_zebrafish", "clade_type", "out_paralog"]
 PAIRISH = ("paired", "paired (resolved by synteny)", "pair retained in few teleosts (synteny-supported)", "possible pair (the other teleosts lost a copy)")
 
 
@@ -62,13 +65,36 @@ def compare_gene_tables(old, new) -> dict:
     res["genes_with_a_changed_call_share"] = round(len(any_call) / len(both), 4) if both else 0
     by_group = {g: len({gid for gid, ch in changed.items() if any(c in ch for c in cl)}) for g, cl in GROUPS.items()}
     res["genes_changed_by_group"] = by_group
+    # a gene that has a clade in one table and none in the other changed because the clade tables differ in coverage (for example a clade split run
+    # with and without --all-families), not because of the input under test: it is counted apart and left out of the clean headline
+    lost = [g for g in both if o[g].get("clade_id") and not n[g].get("clade_id")]
+    gained = [g for g in both if n[g].get("clade_id") and not o[g].get("clade_id")]
+    res["genes_that_lost_their_clade"], res["genes_that_gained_a_clade"] = len(lost), len(gained)
+    cover = set(lost) | set(gained)
+    pilot = {gid for gid, ch in changed.items() if any(c in ch for c in PILOT_CALLS)}
+    clade = {gid for gid, ch in changed.items() if gid not in cover and any(c in ch for c in CLADE_CALLS)}
+    res["clean_headline"] = {"pilot_calls_changed": len(pilot), "clade_calls_changed_same_coverage": len(clade), "any": len(pilot | clade),
+                             "share": round(len(pilot | clade) / len(both), 4) if both else 0}
+    res["warnings"] = []
+    if cover:
+        res["warnings"].append(f"{len(lost)} genes lost and {len(gained)} gained a clade: the clade tables behind the two gene tables differ in coverage (for example one clade split "
+                               "run with --all-families and one without). The headline above includes them; read the clean headline, or rerun the clade split the same way for both.")
     po, pn = _pairs(old), _pairs(new)
-    kept, lost, gained = set(po) & set(pn), set(po) - set(pn), set(pn) - set(po)
-    res["pairs"] = {"old": len(po), "new": len(pn), "kept": len(kept), "lost": len(lost), "gained": len(gained),
+    kept = set(po) & set(pn)
+    lost_pairs, gained_pairs = set(po) - set(pn), set(pn) - set(po)
+    cover_pairs = sum(1 for k in lost_pairs if all(g in cover for g in k))
+    res["pairs"] = {"old": len(po), "new": len(pn), "kept": len(kept), "lost": len(lost_pairs), "gained": len(gained_pairs), "lost_only_because_a_clade_is_missing": cover_pairs,
                     "kept_with_a_different_status": sum(1 for k in kept if po[k] != pn[k]),
                     "genes_with_a_different_partner": sum(1 for gid in both if o[gid].get("ohnolog_gene") and n[gid].get("ohnolog_gene") and o[gid]["ohnolog_gene"] != n[gid]["ohnolog_gene"])}
     res["changed_genes"] = {gid: {c: list(v) for c, v in ch.items()} for gid, ch in changed.items()}
     return res
+
+
+def clade_coverage(rows, clade_rows) -> dict:
+    """How many of a gene table's clade ids are in the clade table that is said to have made it."""
+    ids = {f"{r['family']}:{r['group']}" for r in clade_rows}
+    used = {r["clade_id"] for r in rows if r.get("clade_id")}
+    return {"clade_ids_in_the_gene_table": len(used), "not_in_the_clade_table": len(used - ids)}
 
 
 def compare_clades(old, new) -> dict:
@@ -87,12 +113,18 @@ def compare_clades(old, new) -> dict:
 def report_text(res, clades=None) -> str:
     L = ["# How many calls change", "",
          f"{res['genes_compared']} genes compared ({res['only_in_old']} only in the old table, {res['only_in_new']} only in the new).", "",
-         f"**{res['genes_with_a_changed_call']} genes ({100 * res['genes_with_a_changed_call_share']:.1f}%) change at least one call** among: {', '.join(res['headline_columns'])}.", "",
+         f"{res['genes_with_a_changed_call']} genes ({100 * res['genes_with_a_changed_call_share']:.1f}%) change at least one call among: {', '.join(res['headline_columns'])}.", ""]
+    if res.get("warnings"):
+        L += ["**Warning.** " + w for w in res["warnings"]] + [""]
+    h = res["clean_headline"]
+    L += [f"**Clean headline: {h['any']} genes ({100 * h['share']:.1f}%) change a call.** {h['pilot_calls_changed']} change a call made by the pilot (B1 category, tree call, later-duplicate level, closest genes); "
+          f"{h['clade_calls_changed_same_coverage']} more change a call built on the clade table although they kept their clade. {res['genes_that_lost_their_clade']} genes lost and "
+          f"{res['genes_that_gained_a_clade']} gained a clade.", "",
          "## Genes changed, by group of columns", "", "| group | genes with a change |", "|---|---|"]
     L += [f"| {g} | {v} |" for g, v in res["genes_changed_by_group"].items()]
     p = res["pairs"]
     L += ["", "## Ohnolog pairs", "",
-          f"Old {p['old']}, new {p['new']}: {p['kept']} kept ({p['kept_with_a_different_status']} with a different status), {p['lost']} lost, {p['gained']} gained; "
+          f"Old {p['old']}, new {p['new']}: {p['kept']} kept ({p['kept_with_a_different_status']} with a different status), {p['lost']} lost ({p['lost_only_because_a_clade_is_missing']} only because a clade is missing), {p['gained']} gained; "
           f"{p['genes_with_a_different_partner']} genes have a different partner.", "", "## Column by column", ""]
     for c, d in sorted(res["columns"].items(), key=lambda kv: -kv[1]["changed"]):
         L += [f"### {c} ({d['group']}): {d['changed']} genes change", ""]

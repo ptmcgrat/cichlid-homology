@@ -53,3 +53,28 @@ def test_clades_and_the_files(tmp_path):
         rows = list(csv.reader(fh, delimiter="\t"))
     assert rows[0] == ["gene_id", "b1_category_old", "b1_category_new"] and rows[1] == ["a", "Lost duplicate", "Disputed"]
     assert read(tmp_path / "changed_genes.tsv")[0]["gene_id"] == "a" and "changed_genes" in res                      # the result is left whole
+
+
+def test_a_gene_that_lost_its_clade_is_counted_apart_and_the_clean_headline_leaves_it_out():
+    old = [row("a"), row("b"), row("c"), row("d", b1_category="Disputed")]
+    new = [row("a"), row("b", clade_id="", clade_type="unplaced", teleost_trend="", rel_human="", rel_zebrafish="", out_paralog="", ohnolog_status="not applicable"),
+           row("c", clade_id="", clade_type="unplaced", teleost_trend="", rel_human="", rel_zebrafish="", out_paralog="", ohnolog_status="not applicable", b1_category="Disputed"),
+           row("d", b1_category="Lost duplicate")]
+    r = compare_gene_tables(old, new)
+    assert r["genes_with_a_changed_call"] == 3 and r["genes_that_lost_their_clade"] == 2 and r["genes_that_gained_a_clade"] == 0
+    h = r["clean_headline"]
+    assert (h["pilot_calls_changed"], h["clade_calls_changed_same_coverage"], h["any"], h["share"]) == (2, 0, 2, 0.5)        # c and d change the B1 call; b only lost its clade
+    assert r["warnings"] and "differ in coverage" in r["warnings"][0]
+    assert "Clean headline: 2 genes (50.0%)" in report_text({k: v for k, v in r.items() if k != "changed_genes"})
+
+
+def test_pairs_lost_only_because_a_clade_is_missing_and_the_coverage_check():
+    def pr(g, p):
+        return row(g, ohnolog_status="paired", ohnolog_gene=p)
+    old = [pr("a", "b"), pr("b", "a"), pr("c", "d"), pr("d", "c")]
+    new = [pr("a", "b"), pr("b", "a"), row("c", clade_id="", ohnolog_status="not applicable"), row("d", clade_id="", ohnolog_status="not applicable")]
+    p = compare_gene_tables(old, new)["pairs"]
+    assert (p["old"], p["new"], p["kept"], p["lost"], p["lost_only_because_a_clade_is_missing"]) == (2, 1, 1, 1, 1)
+    from cichlid_homology.compare import clade_coverage
+    clades = [{"family": "F", "group": "G1"}]
+    assert clade_coverage([row("a"), row("b", clade_id="F:G2")], clades) == {"clade_ids_in_the_gene_table": 2, "not_in_the_clade_table": 1}
