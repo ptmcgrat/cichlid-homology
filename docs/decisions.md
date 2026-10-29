@@ -209,3 +209,12 @@ large clades (expanded families), and whether to tell the coordinator that the s
   Pundamilia, and the killifish node with Cyprinodon). A speciation that falls on one of them can read as a duplication, so a call that rests on such a node is lower confidence.
   Myripristis keeps the ladder level teleost. A duplicate carried by M. zebra, A. calliptera and Pundamilia now meets at the four-species haplochromine node (B2).
 - The owner is told how many calls change by rerunning the pilot, the clade split and the gene table on the new tree and comparing with `compare-tables`.
+
+
+## 0.21.0: summary figures for every gene, from Compara and OrthoFinder
+- Owner decisions: TreeFam is used only for the closest human gene; the figure analysis uses Compara and OrthoFinder. The figure is made for every M. zebra gene where it can be, and has to mean the
+  same for both methods. The pilot runs on Compara first.
+- One figure per clade (a gene points to the figure of its clade); data first: the record is the product, the figure is drawn from it.
+- Lineages come from the teleost genes alone; the non-teleost genes are the ancestral copy; where an outgroup attaches is reported with its support and never used to label anything.
+- Support is drawn on its own scale and never merged: Ensembl's bootstrap for the Compara reference tree, the placement weight for a placed gene, none for OrthoFinder until its trees carry support
+  (to ask project 2: IQ-TREE with ultrafast bootstrap and SH-aLRT, in the run itself if the installed OrthoFinder accepts a custom tree command, else a second pass on its alignments).

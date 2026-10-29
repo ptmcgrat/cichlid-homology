@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.21.0 (the figure pilot on the Compara data)
+- New command `figure-pilot`: for a stratified sample of genes (or all of them), one summary record and one figure per clade; records are the product (`clade_records.jsonl`, schema in
+  `docs/clade_record_schema.md`), figures are for looking (`figures/`, `figure_index.html` as a contact sheet, `figure_index.tsv` with the triage numbers). Compara only; TreeFam is not used.
+- `nhx.py`: reads the raw Compara dump (EMF, plain or gz) and its NHX tags: the bootstrap (`B`) and the duplication flag (`D`, `DD`) that the prepared trees lost. `suppmap.py` puts them on our trees
+  by the reference proteins below each node, and roots a placed tree where the reference tree is rooted (`reroot_like`), so the clade cuts and the supports line up.
+- `lineages.py`: the lineages of a clade from the teleost genes alone. The highest node whose two biggest children share at least half of their teleost species (and at least two) is the split;
+  every non-teleost gene is the ancestral copy wherever the tree attaches it, and where it attaches and how well supported that is are reported. This replaces the rule that wanted both sides to be
+  teleost-only, which threw away the real duplication of irx1a and irx1b because a gar and a reedfish gene hang inside one lineage (bootstrap 0 and 25). Lineage letters are ordered by the zebrafish gene
+  of each lineage, so they mean the same in every method.
+- `figrecord.py` builds the record (collapsed tree, lineages, supports, copies per species, our genes with their lineage and placement weight, triage numbers, flags); `figrender.py` draws it
+  (parallel with `--workers`). `cladesplit.split_family` gained `group_leaves` so that the figure finds a clade of the clade table in the placed tree.
+- `figure-pilot` needs matplotlib (`pip install cichlid-homology[figures]` or `pip install matplotlib`); it says so before it starts if it is missing.
+- Sample strata: pairs that match a published pair, genes named a/b but called single copy, other pairs, 1:1 and 1:2 with human, out-paralogs, later duplicates, expansions, ambiguous partners,
+  clades with no human gene, placement weight under 0.5, genes in de novo trees. 220 offline tests.
+
 ## 0.20.0 (species profiles of the ohnolog clades)
 - `clade-split` now also writes, for every clade that holds a teleost-level duplication node (the highest such node is the pair node), the species profile
   of the pair: for each species the number of genes outside the node (the ancestral copy), in lineage A and in lineage B (`clade_species.<part>.clades.json`,

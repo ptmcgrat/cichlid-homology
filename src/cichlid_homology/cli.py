@@ -284,6 +284,55 @@ def _compare_tables(args) -> int:
     return 0
 
 
+def _figure_pilot(args) -> int:
+    """One summary record and one figure per clade of a stratified sample of genes (Compara only; read-only)."""
+    from cichlid_data import Catalog, get_layout
+    from cichlid_data.clades import Clades
+    from cichlid_data.master_tree import load_master_tree
+
+    try:
+        import matplotlib  # noqa: F401
+    except ImportError:
+        print("figure-pilot draws with matplotlib, which is not installed here: `pip install matplotlib` (or `conda install matplotlib`), then run it again.")
+        return 2
+    from .figpilot import run_figure_pilot, select_genes, _read_tsv
+    from .master import load_species_tree, newick_of
+    from .read import load_family, read_tsv
+    from .species import load_leaf_species
+
+    layout = get_layout()
+    out = Path(args.out).expanduser() if args.out else default_out("figure_pilot")
+    cat, clades, st = Catalog.load(layout), Clades.load(), load_species_tree()
+    prefixes = {s.prefix for s in cat.species(release="v1")}
+    rows = {r["gene_id"]: r for r in _read_tsv(Path(args.gene_table).expanduser())}
+    res = layout.results("v1", "Compara")
+    froot = res.family("X").local.parent
+    pl = Path(res.native().local) / "summary" / "gene_placement.tsv"
+    placement = {r["gene_id"]: r for r in read_tsv(pl) if r["gene_id"].startswith(args.species + "_")} if pl.exists() else {}
+    if args.prepared:
+        prepared = Path(args.prepared).expanduser()
+    else:
+        fr = layout.family_resource("Compara116")
+        prepared = Path(getattr(fr, "local", fr)) / "prepared"
+    explicit = [x.strip() for x in open(Path(args.genes).expanduser()) if x.strip()] if args.genes else []
+    if args.only_genes:
+        genes = [{"gene": g, "stratum": "requested"} for g in explicit if g in rows]
+    elif args.all:
+        genes = [{"gene": g, "stratum": "all"} for g in sorted(rows) if rows[g].get("family") not in ("", "NoHit")]
+    else:
+        genes = select_genes(rows, args.per_stratum, args.seed, placement, explicit)
+    print(f"{len(genes)} genes selected; reference trees under {prepared}", flush=True)
+    summary = run_figure_pilot(genes=genes, rows=rows, prepared=prepared, froot=froot, placement=placement, prefixes=prefixes, load_family=load_family,
+                               load_ls=lambda names: load_leaf_species(layout, "Compara", only=names), st=st, clades=clades, master_newick=newick_of(load_master_tree()), out_dir=out,
+                               dump=Path(args.dump).expanduser() if args.dump else None, workers=args.workers, dpi=args.dpi, fmt=args.format,
+                               progress=lambda m: print(m, flush=True))
+    print(json.dumps({k: v for k, v in summary.items() if k not in ("errors", "figure_errors")}, indent=1, default=str))
+    if summary["errors"] or summary["figure_errors"]:
+        print(f"{len(summary['errors'])} family errors and {len(summary['figure_errors'])} figure errors: see {out / 'figure_pilot.json'}")
+    print(f"\nwritten to {out}\nopen {out / 'figure_index.html'}")
+    return 0
+
+
 def _pilot(args) -> int:
     from cichlid_data import Catalog, get_layout
     from cichlid_data.clades import Clades
@@ -408,6 +457,21 @@ def main(argv=None) -> int:
     s2.add_argument("--n-denovo", type=int, default=100)
     s2.add_argument("--out", default=None)
     s2.set_defaults(func=_survey2)
+    fp = sub.add_parser("figure-pilot", help="a summary record and a figure for every clade of a sample of genes (Compara; read-only)")
+    fp.add_argument("--gene-table", required=True, help="gene_table.<species>.tsv of `gene-table`")
+    fp.add_argument("--prepared", default=None, help="the reference trees: .../Compara116/prepared (default: from the coordinator)")
+    fp.add_argument("--dump", default=None, help="the raw Compara dump Compara.<release>.protein_default.nhx.emf.gz, for the support values (optional)")
+    fp.add_argument("--species", default="Mzeb", help="the focal species prefix")
+    fp.add_argument("--per-stratum", type=int, default=10, help="genes drawn from each stratum of the sample")
+    fp.add_argument("--genes", default=None, help="a file of gene ids to add (one per line)")
+    fp.add_argument("--only-genes", action="store_true", help="draw only the genes of --genes")
+    fp.add_argument("--all", action="store_true", help="every gene of the table")
+    fp.add_argument("--seed", type=int, default=1)
+    fp.add_argument("--workers", type=int, default=1, help="processes for drawing")
+    fp.add_argument("--dpi", type=int, default=110)
+    fp.add_argument("--format", default="png", choices=("png", "svg"))
+    fp.add_argument("--out", default=None, help="default: ~/share/figure_pilot_<version>_<timestamp>")
+    fp.set_defaults(func=_figure_pilot)
     ct = sub.add_parser("compare-tables", help="how many calls change between two gene tables (read-only)")
     ct.add_argument("--old", required=True, help="the earlier gene_table.<species>.tsv")
     ct.add_argument("--new", required=True, help="the later gene_table.<species>.tsv")

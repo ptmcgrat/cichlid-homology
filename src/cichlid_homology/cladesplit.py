@@ -111,7 +111,7 @@ def _stats(vals):
     return med, cv
 
 
-def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, already_rooted=True, profiles=None):
+def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, already_rooted=True, profiles=None, group_leaves=None):
     """(family row, [group rows]) for one reference family tree, or None when nothing is left of it."""
     root = parse_newick(newick)
     sp_of = {x.name: ls.species(x.name) for x in leaves(root)}
@@ -226,6 +226,9 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
             pf = profile_of(fid, r["group"], g, rt, T, supported, names)
             if pf:
                 profiles.append(pf)
+    if group_leaves is not None:                                      # the leaves of each group, so that a figure can find the clade in another tree of the family
+        for r, g in zip(rows, [g for g in groups if any(T.M[id(x)] is not None for x in rt.leaves_in(g))]):
+            group_leaves.append((r["group"], frozenset(x.name for x in rt.leaves_in(g))))
     fam = {"family": fid, "n_genes": sum(1 for x in rt.leaves if T.M[id(x)] is not None),
            "n_human": sum(1 for x in rt.leaves if x.sp == names["human"]), "n_groups": len(rows),
            "n_groups_with_human": sum(1 for r in rows if r["n_human"] > 0), "n_ancient_dups": n_anc,
