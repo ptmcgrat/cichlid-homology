@@ -134,3 +134,57 @@ def test_nhx_tags_are_read_on_leaves_and_inner_nodes_and_an_emf_block_is_found_b
     emf.write_text("SEQ sp1 p1 1 1 2 1 g1 s1\nSEQ sp2 p2 1 1 2 1 g2\n\nDATA\n(p1,p2)[&&NHX:B=90];\n//\nSEQ sp1 q1 1 1 2 1 h1 t1\nSEQ sp2 q2 1 1 2 1 h2 t2\n\nDATA\n(q1,q2)[&&NHX:B=10];\n//\n")
     found = nhx.collect_support(emf, {"famB": {"q2", "q1"}})
     assert list(found) == ["famB"] and found["famB"]["support"] == {frozenset({"q1", "q2"}): (10, None, None)} and found["famB"]["symbols"] == {"q1": "t1", "q2": "t2"}
+
+
+def _deep(newick):
+    from cichlid_homology.figrecord import deep_order
+    pan = {s["name"]: s for s in json.load(open(DATA / "panel_species.json"))}
+
+    class C:
+        order = ["outside_vertebrates", "cyclostome", "gnathostome", "teleost", "percomorph", "ovalentaria", "cichlid"]
+
+        def level(self, s):
+            return pan[s]["level"]
+
+        def lineage(self, s):
+            return {"tetrapod": "sarcopterygian", "coelacanth": "sarcopterygian", "cartilaginous fish": "chondrichthyan"}.get(pan[s]["group"], "actinopterygian")
+    root = parse_newick(newick)
+    for x in leaves(root):
+        x.sp = x.name.split("#")[0]
+    from cichlid_homology.cladeprofile import group_label
+    return deep_order(root, lambda sp: group_label(sp, C(), "latimeria_chalumnae"), lambda n: False)
+
+
+IDEAL = ("(callorhinchus_milii#1,((latimeria_chalumnae#1,homo_sapiens#1),(erpetoichthys_calabaricus#1,(lepisosteus_oculatus#1,(danio_rerio#1,gasterosteus_aculeatus#1)))));")
+
+
+def test_the_deep_order_of_an_ideal_tree_is_fully_recovered_and_each_failure_is_named():
+    d = _deep(IDEAL)
+    assert (d["tested"], d["passed"], d["score"]) == (4, 4, 1.0)
+    d = _deep("(callorhinchus_milii#1,((latimeria_chalumnae#1,homo_sapiens#1),(erpetoichthys_calabaricus#1,(danio_rerio#1,(lepisosteus_oculatus#1,gasterosteus_aculeatus#1)))));")
+    assert d["gar_outside_teleosts"] is False and d["reedfish_outside_gar_teleosts"] is True and d["score"] == 0.75          # gar nested among the teleosts
+    d = _deep("(callorhinchus_milii#1,((latimeria_chalumnae#1,(danio_rerio#1,gasterosteus_aculeatus#1)),(homo_sapiens#1,(erpetoichthys_calabaricus#1,lepisosteus_oculatus#1))));")
+    assert d["coelacanth_with_tetrapods"] is False
+    d = _deep("((callorhinchus_milii#1,homo_sapiens#1),((latimeria_chalumnae#1,homo_sapiens#2),(erpetoichthys_calabaricus#1,(lepisosteus_oculatus#1,(danio_rerio#1,gasterosteus_aculeatus#1)))));")
+    assert d["shark_outside"] is False and d["coelacanth_with_tetrapods"] is True
+
+
+def test_a_relationship_is_tested_only_when_its_species_are_there_and_the_real_irx1_tree_recovers_two_of_four():
+    d = _deep("((danio_rerio#1,gasterosteus_aculeatus#1),(danio_rerio#2,gasterosteus_aculeatus#2));")
+    assert d["tested"] == 0 and d["score"] is None and d["shark_outside"] is None
+    pan = {s["name"]: s for s in json.load(open(DATA / "panel_species.json"))}
+    pfx = {v: k for k, v in json.load(open(DATA / "panel_prefixes.json")).items()}
+    root = parse_newick((DATA / "irx1_prepared.nhx").read_text().strip())
+    for x in leaves(root):
+        x.sp = pfx[re.match(r"^(ENS[A-Z]*?P)\d", x.name).group(1)]
+    from cichlid_homology.cladeprofile import group_label
+    from cichlid_homology.figrecord import deep_order
+
+    class C:
+        def level(self, s):
+            return pan[s]["level"]
+
+        def lineage(self, s):
+            return {"tetrapod": "sarcopterygian", "coelacanth": "sarcopterygian", "cartilaginous fish": "chondrichthyan"}.get(pan[s]["group"], "actinopterygian")
+    d = deep_order(root, lambda sp: group_label(sp, C(), "latimeria_chalumnae"), lambda n: False)
+    assert d == {"shark_outside": True, "coelacanth_with_tetrapods": True, "reedfish_outside_gar_teleosts": False, "gar_outside_teleosts": False, "tested": 4, "passed": 2, "score": 0.5}

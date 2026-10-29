@@ -289,6 +289,7 @@ def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dic
     summary["figure_errors"] = bad[:20]
     _write_index(out_dir, index, rows, summary)
     flags = collections.Counter(f for r in records for f in r["flags"])
+    summary["tally"] = tally(records)
     summary.update(clades=len(records), figures=len(results) - len(bad), flags=dict(flags), modes=dict(collections.Counter(r["mode"] for r in records)),
                    splits=dict(collections.Counter((r["split"] or {}).get("kind", "none") for r in records)), seconds=round(time.time() - t0, 1))
     summary["skipped"] = dict(summary["skipped"])
@@ -296,14 +297,52 @@ def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dic
     return summary
 
 
+def tally(records: list) -> dict:
+    """What the records say about the tree as a whole: how often each known deep relationship is recovered, how many copies of gar and reedfish the split clades have, where the non-teleost genes
+    attach, and whether they attach to the slower lineage (the one with the shorter stem)."""
+    from .figrecord import DEEP_ORDER, GAR, REEDFISH
+    rel = {k: {"tested": 0, "passed": 0} for k in DEEP_ORDER}
+    scores = collections.Counter()
+    for r in records:
+        d = r.get("deep_order") or {}
+        for k in DEEP_ORDER:
+            if d.get(k) is not None:
+                rel[k]["tested"] += 1
+                rel[k]["passed"] += 1 if d[k] else 0
+        if d.get("score") is not None:
+            scores[str(d["score"])] += 1
+    for k in rel:
+        rel[k]["share"] = round(rel[k]["passed"] / rel[k]["tested"], 3) if rel[k]["tested"] else None
+    split = [r for r in records if r["mode"] == "split"]
+    copies = {}
+    for sp in (GAR, REEDFISH):
+        c = collections.Counter()
+        for r in split:
+            sps = r["strip"]["species"]
+            if sp in sps:
+                n = sum(r["strip"]["counts"][sps.index(sp)])
+                c["0" if n == 0 else ("1" if n == 1 else "2+")] += 1
+        copies[sp] = dict(c)
+    inside, slower, tested = collections.Counter(), 0, 0
+    for r in split:
+        stems = {l["id"]: l["stem"] for l in r["lineages"] if l.get("stem")}
+        for o in r["outgroup"]["inside"]:
+            inside[o["species"]] += 1
+            if o["lineage"] in stems and len(stems) >= 2:
+                tested += 1
+                slower += 1 if stems[o["lineage"]] == min(stems.values()) else 0
+    return {"deep_order": rel, "deep_order_scores": dict(sorted(scores.items())), "split_clades": len(split), "outgroup_copies_in_split_clades": copies,
+            "outgroup_inside_by_species": dict(inside), "outgroup_inside_slower_lineage": {"tested": tested, "slower": slower, "share": round(slower / tested, 3) if tested else None}}
+
+
 def _write_index(out_dir: Path, index: list, rows: dict, summary: dict):
     with open(out_dir / "figure_index.tsv", "w", newline="") as fh:
         w = csv.writer(fh, delimiter="\t")
-        w.writerow(["gene_id", "symbol", "stratum", "family", "clade", "mode", "split_kind", "overlap", "split_support", "weakest_crown", "outgroup_inside", "stem_ratio", "flags", "figure"])
+        w.writerow(["gene_id", "symbol", "stratum", "family", "clade", "mode", "split_kind", "overlap", "split_support", "weakest_crown", "outgroup_inside", "stem_ratio", "deep_order_score", "flags", "figure"])
         for x in sorted(index, key=lambda x: (x["stratum"], x["gene"])):
             r, t = x["record"], x["record"]["triage"]
             w.writerow([x["gene"], rows.get(x["gene"], {}).get("symbol", ""), x["stratum"], x["family"], x["clade"], r["mode"], (r["split"] or {}).get("kind", ""), t["overlap"], t["split_support"],
-                        t["weakest_crown"], t["outgroup_inside"], t["stem_ratio"], ",".join(r["flags"]), x["figure"]])
+                        t["weakest_crown"], t["outgroup_inside"], t["stem_ratio"], t.get("deep_order_score"), ",".join(r["flags"]), x["figure"]])
     parts = ["<html><head><meta charset='utf-8'><title>Figure pilot</title><style>body{font:14px sans-serif;margin:20px}table{border-collapse:collapse}td{border:1px solid #ccc;padding:6px;vertical-align:top}"
              "img{width:560px}h2{margin-top:28px}.f{color:#b00020}.m{color:#666}</style></head><body><h1>Figure pilot (Compara)</h1>"]
     by = collections.defaultdict(list)
@@ -318,7 +357,7 @@ def _write_index(out_dir: Path, index: list, rows: dict, summary: dict):
             r, t, g = x["record"], x["record"]["triage"], rows.get(x["gene"], {})
             lines = [f"<b>{html.escape(g.get('symbol') or x['gene'])}</b> {html.escape(x['gene'])}", html.escape(g.get("b1_category", "")), html.escape(g.get("ohnolog_status", "")),
                      f"clade {html.escape(x['clade'])}", f"mode: {r['mode']}" + (f", {r['split']['kind']} split" if r["split"] else ""),
-                     f"overlap {t['overlap']}, split support {t['split_support']}, weakest crown {t['weakest_crown']}, outgroup inside {t['outgroup_inside']}, stem ratio {t['stem_ratio']}"]
+                     f"overlap {t['overlap']}, split support {t['split_support']}, weakest crown {t['weakest_crown']}, outgroup inside {t['outgroup_inside']}, stem ratio {t['stem_ratio']}, deep order {t.get('deep_order_score')}"]
             parts.append(f"<tr><td style='width:340px'>{'<br>'.join(l for l in lines if l)}<br><span class='f'>{html.escape(', '.join(r['flags']))}</span></td>"
                          f"<td><a href='{x['figure']}'><img loading='lazy' src='{x['figure']}'></a></td></tr>")
         parts.append("</table>")

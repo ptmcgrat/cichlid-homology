@@ -98,6 +98,9 @@ def test_the_pilot_makes_a_record_and_a_figure_per_clade_with_support_and_our_ge
     idx = list(__import__("csv").DictReader(open(out / "figure_index.tsv"), delimiter="\t"))
     assert [r["gene_id"] for r in idx] == ["Mzeb_1", "Mzeb_2"] and idx[0]["split_kind"] == "teleost" and idx[0]["figure"] == "figures/F1_G1.png"
     assert "published_pair" in (out / "figure_index.html").read_text()
+    t = summary["tally"]
+    assert t["split_clades"] == 1 and set(t["deep_order"]) == {"shark_outside", "coelacanth_with_tetrapods", "reedfish_outside_gar_teleosts", "gar_outside_teleosts"}
+    assert t["outgroup_inside_slower_lineage"] == {"tested": 0, "slower": 0, "share": None} and rec["deep_order"]["tested"] == 0          # the fake species are not shark, gar or reedfish
 
 
 def test_without_the_dump_there_is_no_support_and_the_record_says_so(tmp_path):

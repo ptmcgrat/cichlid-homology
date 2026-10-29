@@ -16,6 +16,50 @@ from .tree import Node, leaves, postorder
 SCHEMA = "cichlid-homology/clade-record/1"
 
 
+GAR, REEDFISH = "lepisosteus_oculatus", "erpetoichthys_calabaricus"
+DEEP_ORDER = ("shark_outside", "coelacanth_with_tetrapods", "reedfish_outside_gar_teleosts", "gar_outside_teleosts")
+
+
+def deep_order(g: Node, group_of, is_focal, gar: str = GAR, reedfish: str = REEDFISH) -> dict:
+    """Does the tree recover the four relationships we know? Shark outside the bony fishes; coelacanth with the tetrapods; reedfish outside gar and the teleosts; gar outside the teleosts.
+    A relationship is tested only when its species are in the clade. The score is the share recovered: a quality score for the deep nodes of the tree. Gar and reedfish are single genes that
+    branch just before the teleost duplication and are the ones that wander; the coelacanth is the control."""
+    post = postorder(g)
+    below = {}
+    for n in post:
+        below[id(n)] = frozenset([id(n)]) if not n.children else frozenset().union(*(below[id(c)] for c in n.children))
+    lv = [x for x in leaves(g) if x.sp and not is_focal(x.name)]
+    grp = {id(x): group_of(x.sp) for x in lv}
+    shark = [x for x in lv if grp[id(x)] == "cartilaginous fish"]
+    coel = [x for x in lv if grp[id(x)] == "coelacanth"]
+    tet = [x for x in lv if grp[id(x)] == "tetrapod"]
+    gars = [x for x in lv if x.sp == gar]
+    reeds = [x for x in lv if x.sp == reedfish]
+    tel = [x for x in lv if grp[id(x)] in ("early teleost", "percomorph", "ovalentarian", "cichlid")]
+    ids = lambda xs: frozenset(id(x) for x in xs)
+
+    def lca(s):
+        for n in post:
+            if s <= below[id(n)]:
+                return n
+        return g
+    out = dict.fromkeys(DEEP_ORDER)
+    bony = coel + tet + gars + reeds + tel
+    if shark and len(bony) >= 2:
+        out["shark_outside"] = not (ids(shark) & below[id(lca(ids(bony)))])
+    if coel and tet:
+        best = min((lca(frozenset([id(c), id(t)])) for c in coel for t in tet), key=lambda n: len(below[id(n)]))
+        out["coelacanth_with_tetrapods"] = not (ids(gars + reeds + tel) & below[id(best)])
+    if reeds and gars and tel:
+        out["reedfish_outside_gar_teleosts"] = not (ids(reeds) & below[id(lca(ids(gars + tel)))])
+    if gars and len({x.sp for x in tel}) >= 2:
+        out["gar_outside_teleosts"] = not (ids(gars) & below[id(lca(ids(tel)))])
+    tested = [k for k in DEEP_ORDER if out[k] is not None]
+    passed = [k for k in tested if out[k]]
+    out.update(tested=len(tested), passed=len(passed), score=(round(len(passed) / len(tested), 2) if tested else None))
+    return out
+
+
 def _own(x: Node, is_focal, focal_species) -> bool:
     return is_focal(x.name) and x.sp == focal_species
 
@@ -77,7 +121,8 @@ def _count_nodes(t) -> int:
 
 
 def build_record(g: Node, *, method: str, family: str, clade: str, focal_species: str, is_focal, clades, panel: list, species_labels: dict, support=None, symbols=None,
-                 placements=None, calls=None, tree_mode: str = "place", root_source: str = "", overlap_t: float = 0.5, participates=None, highlight=()) -> dict:
+                 placements=None, calls=None, tree_mode: str = "place", root_source: str = "", overlap_t: float = 0.5, participates=None, highlight=(), gar: str = GAR,
+                 reedfish: str = REEDFISH) -> dict:
     """The record of the clade whose root in a rooted tree is `g`. `panel` is the list of reference species, in drawing order. `placements` is {gene: {"lwr", "status", "n_placements"}},
     `calls` is {gene: {column: value}} from the gene table, `symbols` is {protein: symbol} from the raw dump."""
     symbols, placements, calls = symbols or {}, placements or {}, calls or {}
@@ -128,7 +173,11 @@ def build_record(g: Node, *, method: str, family: str, clade: str, focal_species
               "shared_species": (len(an.S[id(an.split.lineages[0])] & an.S[id(an.split.lineages[1])]) if an.split else None),
               "split_support": sp_support[0] if sp_support else None, "weakest_crown": min(crowns) if crowns else None, "outgroup_inside": len(an.outgroup_inside),
               "stem_ratio": round(max(stems) / min(stems), 2) if len(stems) >= 2 and min(stems) > 0 else None}
+    deep = deep_order(g, group_of, is_focal, gar, reedfish)
+    triage["deep_order_score"] = deep["score"]
     flags = []
+    if deep["tested"] and deep["passed"] < deep["tested"]:
+        flags.append("deep_order_inconsistent")
     if an.mode != "split":
         flags.append("no_split" if an.mode == "single" else "no_teleost_genes")
     if an.outgroup_inside:
@@ -144,4 +193,4 @@ def build_record(g: Node, *, method: str, family: str, clade: str, focal_species
             "split": ({"kind": an.split.kind, "level": an.split.level, "overlap": round(an.split.overlap, 3), "n_lineages": len(an.letters)} if an.split else None),
             "lineages": [{k_: v for k_, v in l.items() if k_ != "crown_node"} for l in an.lineages], "letters": an.letters,
             "outgroup": {"inside": an.outgroup_inside, "outside": an.outgroup_outside}, "strip": strip, "focal_strip": focal_strip, "genes": genes, "anchors": anchors,
-            "tree": tree, "support_items": items, "support_available": bool(support), "triage": triage, "flags": flags}
+            "deep_order": deep, "tree": tree, "support_items": items, "support_available": bool(support), "triage": triage, "flags": flags}

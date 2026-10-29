@@ -88,7 +88,7 @@ def render_record(rec: dict, path, dpi: int = 110, fmt: str = "png"):
     hD = 0.17 * nl + 0.3
     Hz = max(hA, 0.45 + hBax + 0.75 + hD, 4.0)
     Hs = 3.7
-    HEAD = 1.3
+    HEAD = 1.5
     H = HEAD + Hz + Hs + 0.45
     fig = plt.figure(figsize=(W, H), dpi=dpi)
     fig.patch.set_facecolor("white")
@@ -105,8 +105,15 @@ def render_record(rec: dict, path, dpi: int = 110, fmt: str = "png"):
     else:
         sub = "No teleost gene in this clade."
     fig.text(0.015, 1 - 0.60 / H, sub, fontsize=9.3, ha="left", va="center", color=MUTED)
+    d = rec.get("deep_order") or {}
+    if d.get("tested"):
+        names = {"shark_outside": "shark outside the bony fishes", "coelacanth_with_tetrapods": "coelacanth with the tetrapods", "reedfish_outside_gar_teleosts": "reedfish outside gar and teleosts",
+                 "gar_outside_teleosts": "gar outside the teleosts"}
+        failed = [names[k] for k in names if d.get(k) is False]
+        fig.text(0.015, 1 - 0.88 / H, f"Known deep order recovered: {d['passed']} of {d['tested']} tested" + (f" (not: {'; '.join(failed)})" if failed else ""), fontsize=8.6, ha="left", va="center",
+                 color=("#b00020" if failed else MUTED))
     if rec["flags"]:
-        fig.text(0.015, 1 - 0.88 / H, "flags: " + ", ".join(rec["flags"]), fontsize=8.2, ha="left", va="center", color="#b00020")
+        fig.text(0.015, 1 - 1.14 / H, "flags: " + ", ".join(rec["flags"]), fontsize=8.2, ha="left", va="center", color="#b00020")
     # ---------------- panel A: the collapsed tree
     axA = ax(0.2, 0.45 + Hs, 9.4, Hz)
     axA.axis("off")

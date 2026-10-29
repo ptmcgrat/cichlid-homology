@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.1 (is the deep order of the tree right?)
+- Each clade record carries `deep_order`: whether the tree recovers the four relationships we know (shark outside the bony fishes; coelacanth with the tetrapods; reedfish outside gar and the
+  teleosts; gar outside the teleosts), tested only where the species are present, with a score. Why: the position of a single gar or reedfish gene is unreliable (short internal branches, long
+  tips), so it should not date anything; the share of known relationships a tree recovers is a quality score for its deep nodes, with the coelacanth as the control. On the real irx1 tree it is 2 of 4.
+  The figure says which failed (flag `deep_order_inconsistent`), and `figure_index.tsv` has the score.
+- The pilot summary has a `tally`: how often each relationship is recovered, the scores, the copies of gar and reedfish in clades that have a split, where the non-teleost genes attach by species,
+  and whether they attach to the slower lineage (the one with the shorter stem), which tells whether the position of an outgroup says anything about rate asymmetry between the ohnologs.
+  222 offline tests.
+
 ## 0.21.0 (the figure pilot on the Compara data)
 - New command `figure-pilot`: for a stratified sample of genes (or all of them), one summary record and one figure per clade; records are the product (`clade_records.jsonl`, schema in
   `docs/clade_record_schema.md`), figures are for looking (`figures/`, `figure_index.html` as a contact sheet, `figure_index.tsv` with the triage numbers). Compara only; TreeFam is not used.
