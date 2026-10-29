@@ -78,3 +78,18 @@ def test_pairs_lost_only_because_a_clade_is_missing_and_the_coverage_check():
     from cichlid_homology.compare import clade_coverage
     clades = [{"family": "F", "group": "G1"}]
     assert clade_coverage([row("a"), row("b", clade_id="F:G2")], clades) == {"clade_ids_in_the_gene_table": 2, "not_in_the_clade_table": 1}
+
+
+def test_a_b_named_pairs_are_classified_before_and_after():
+    from cichlid_homology.compare import compare_name_pairs
+    def g(gid, sym, fam, clade, partner="", status="single copy (duplicate lost)"):
+        return row(gid, symbol=sym, family=fam, clade_id=clade, ohnolog_gene=partner, ohnolog_status=status)
+    old = [g("a1", "gnb1a", "F1", "F1:G1"), g("b1", "gnb1b", "F1", "F1:G2"), g("a2", "ascl1a", "F2", "F2:G1"), g("b2", "ascl1b", "F3", "F3:G1"), g("a3", "xyz1a", "F4", "F4:G1"), g("a3x", "xyz1b", "F4", "F4:G1"),
+           g("a4", "locb1a", "F5", "F5:G1"), g("a5", "LOC1a", "F6", "F6:G1")]
+    new = [g("a1", "gnb1a", "F1", "F1:G1", "b1", "paired"), g("b1", "gnb1b", "F1", "F1:G1", "a1", "paired"), g("a2", "ascl1a", "F2", "F2:G1"), g("b2", "ascl1b", "F3", "F3:G1"),
+           g("a3", "xyz1a", "F4", "F4:G1"), g("a3x", "xyz1b", "F4", "F4:G1"), g("a4", "locb1a", "F5", "F5:G1"), g("a5", "LOC1a", "F6", "F6:G1")]
+    r = compare_name_pairs(old, new)
+    assert r["pairs"] == 3 and r["old"] == {"same family, different clades": 1, "different families": 1, "same clade, not partners": 1}
+    assert [["same family, different clades", "partners (a pair of ours)", 1]] == [t for t in r["transitions"] if t[1].startswith("partners")]
+    res = compare_gene_tables(old, new)
+    assert res["name_pairs"]["pairs"] == 3 and "Genes named a and b" in report_text({k: v for k, v in res.items() if k != "changed_genes"})

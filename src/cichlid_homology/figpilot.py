@@ -159,7 +159,7 @@ def _read_tsv(path) -> list:
 
 
 def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dict, prefixes: set, load_family, load_ls, st, clades, master_newick: str, out_dir, dump=None,
-                     workers: int = 1, dpi: int = 110, fmt: str = "png", method: str = "Compara", progress=print) -> dict:
+                     workers: int = 1, dpi: int = 110, fmt: str = "png", method: str = "Compara", progress=print, min_outgroup: int = 1) -> dict:
     """`genes`: [{gene, stratum}]; `rows`: the gene table by gene_id; `prepared`: the folder with the reference trees; `froot`: the folder of the family folders of the method;
     `load_family(folder, prefixes, family_id)`; `load_ls(names)` returns the leaf-to-species table for those leaf names."""
     t0 = time.time()
@@ -213,7 +213,7 @@ def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dic
             if fam in refs and f.tree_mode == "place":
                 ref_text = refs[fam]
                 try:
-                    split_family(fam, ref_text, ls, st, clades, ctx, group_leaves=gl)
+                    split_family(fam, ref_text, ls, st, clades, ctx, group_leaves=gl, min_outgroup=min_outgroup)
                 except Exception:
                     gl = []
                 ref_root = parse_newick(ref_text)
@@ -290,6 +290,8 @@ def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dic
     _write_index(out_dir, index, rows, summary)
     flags = collections.Counter(f for r in records for f in r["flags"])
     summary["tally"] = tally(records)
+    summary["strata"] = strata_summary(index)
+    summary["min_outgroup_species"] = min_outgroup
     summary.update(clades=len(records), figures=len(results) - len(bad), flags=dict(flags), modes=dict(collections.Counter(r["mode"] for r in records)),
                    splits=dict(collections.Counter((r["split"] or {}).get("kind", "none") for r in records)), seconds=round(time.time() - t0, 1))
     summary["skipped"] = dict(summary["skipped"])
@@ -298,21 +300,25 @@ def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dic
 
 
 def tally(records: list) -> dict:
-    """What the records say about the tree as a whole: how often each known deep relationship is recovered, how many copies of gar and reedfish the split clades have, where the non-teleost genes
-    attach, and whether they attach to the slower lineage (the one with the shorter stem)."""
+    """What the records say about the trees as a whole. Every count is of clades, never of genes: the genes of one clade are not independent. `n` says how many clades a number rests on.
+    How often each known deep relationship is recovered (strictly and tolerating 10% stray genes); how many copies of gar and reedfish the clades with a split have; in how many clades a non-teleost
+    gene attaches inside a lineage, by species; and whether the lineage with most of them is the slower one (the shorter stem)."""
     from .figrecord import DEEP_ORDER, GAR, REEDFISH
-    rel = {k: {"tested": 0, "passed": 0} for k in DEEP_ORDER}
-    scores = collections.Counter()
+    rel = {"strict": {k: {"tested": 0, "passed": 0} for k in DEEP_ORDER}, "tolerant": {k: {"tested": 0, "passed": 0} for k in DEEP_ORDER}}
+    scores = {"strict": collections.Counter(), "tolerant": collections.Counter()}
     for r in records:
         d = r.get("deep_order") or {}
-        for k in DEEP_ORDER:
-            if d.get(k) is not None:
-                rel[k]["tested"] += 1
-                rel[k]["passed"] += 1 if d[k] else 0
-        if d.get("score") is not None:
-            scores[str(d["score"])] += 1
-    for k in rel:
-        rel[k]["share"] = round(rel[k]["passed"] / rel[k]["tested"], 3) if rel[k]["tested"] else None
+        for kind, src in (("strict", d), ("tolerant", d.get("tolerant") or {})):
+            for k in DEEP_ORDER:
+                if src.get(k) is not None:
+                    rel[kind][k]["tested"] += 1
+                    rel[kind][k]["passed"] += 1 if src[k] else 0
+            if src.get("score") is not None:
+                scores[kind][str(src["score"])] += 1
+    for kind in rel:
+        for k in rel[kind]:
+            t = rel[kind][k]
+            t["share"] = round(t["passed"] / t["tested"], 3) if t["tested"] else None
     split = [r for r in records if r["mode"] == "split"]
     copies = {}
     for sp in (GAR, REEDFISH):
@@ -323,16 +329,36 @@ def tally(records: list) -> dict:
                 n = sum(r["strip"]["counts"][sps.index(sp)])
                 c["0" if n == 0 else ("1" if n == 1 else "2+")] += 1
         copies[sp] = dict(c)
-    inside, slower, tested = collections.Counter(), 0, 0
+    inside, slower, tested, with_inside = collections.Counter(), 0, 0, 0
     for r in split:
+        ins = r["outgroup"]["inside"]
+        if not ins:
+            continue
+        with_inside += 1
+        for sp in {o["species"] for o in ins}:
+            inside[sp] += 1                                                   # clades, not genes
         stems = {l["id"]: l["stem"] for l in r["lineages"] if l.get("stem")}
-        for o in r["outgroup"]["inside"]:
-            inside[o["species"]] += 1
-            if o["lineage"] in stems and len(stems) >= 2:
-                tested += 1
-                slower += 1 if stems[o["lineage"]] == min(stems.values()) else 0
-    return {"deep_order": rel, "deep_order_scores": dict(sorted(scores.items())), "split_clades": len(split), "outgroup_copies_in_split_clades": copies,
-            "outgroup_inside_by_species": dict(inside), "outgroup_inside_slower_lineage": {"tested": tested, "slower": slower, "share": round(slower / tested, 3) if tested else None}}
+        top = collections.Counter(o["lineage"] for o in ins).most_common(1)[0][0]
+        if top in stems and len(stems) >= 2:
+            tested += 1
+            slower += 1 if stems[top] == min(stems.values()) else 0
+    return {"deep_order": rel["strict"], "deep_order_tolerant": rel["tolerant"], "deep_order_scores": dict(sorted(scores["strict"].items())),
+            "deep_order_scores_tolerant": dict(sorted(scores["tolerant"].items())), "clades": len(records), "split_clades": len(split), "outgroup_copies_in_split_clades": copies,
+            "clades_with_an_outgroup_inside_a_lineage": with_inside, "outgroup_inside_by_species_in_clades": dict(inside),
+            "outgroup_inside_slower_lineage": {"clades_tested": tested, "slower": slower, "share": round(slower / tested, 3) if tested else None}}
+
+
+def strata_summary(index: list) -> dict:
+    """Per stratum: the genes, the clades their figures show, and what the lineage view found in them."""
+    out = {}
+    for x in index:
+        c = out.setdefault(x["stratum"], collections.Counter())
+        r = x["record"]
+        c["genes"] += 1
+        c["teleost_split" if (r["split"] or {}).get("kind") == "teleost" else ("later_split" if r["split"] else "no_split")] += 1
+        c["gene_outside_clade_node"] += 1 if "gene_outside_clade_node" in r["flags"] else 0
+        c["deep_order_inconsistent"] += 1 if "deep_order_inconsistent" in r["flags"] else 0
+    return {k: dict(v) for k, v in out.items()}
 
 
 def _write_index(out_dir: Path, index: list, rows: dict, summary: dict):

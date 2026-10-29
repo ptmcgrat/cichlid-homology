@@ -18,12 +18,15 @@ SCHEMA = "cichlid-homology/clade-record/1"
 
 GAR, REEDFISH = "lepisosteus_oculatus", "erpetoichthys_calabaricus"
 DEEP_ORDER = ("shark_outside", "coelacanth_with_tetrapods", "reedfish_outside_gar_teleosts", "gar_outside_teleosts")
+TOLERANCE = 0.9
 
 
-def deep_order(g: Node, group_of, is_focal, gar: str = GAR, reedfish: str = REEDFISH) -> dict:
+def deep_order(g: Node, group_of, is_focal, gar: str = GAR, reedfish: str = REEDFISH, tolerance: float = TOLERANCE) -> dict:
     """Does the tree recover the four relationships we know? Shark outside the bony fishes; coelacanth with the tetrapods; reedfish outside gar and the teleosts; gar outside the teleosts.
-    A relationship is tested only when its species are in the clade. The score is the share recovered: a quality score for the deep nodes of the tree. Gar and reedfish are single genes that
-    branch just before the teleost duplication and are the ones that wander; the coelacanth is the control."""
+    A relationship is tested only when its species are in the clade. Each is tested twice: strictly (the smallest clade that holds all the genes of the group must not hold the outgroup, so one
+    stray gene breaks it) and tolerantly (some branch that does not hold the outgroup holds at least `tolerance`, 90%, of the genes of the group). The tolerant test never passes fewer clades than the
+    strict one. Gar and reedfish are single genes that branch just before the teleost duplication and are the ones that wander; the coelacanth is the control. The record stores both; the
+    score and the flag use the tolerant one, because a single misplaced teleost gene breaks the strict test in half of the clades."""
     post = postorder(g)
     below = {}
     for n in post:
@@ -43,21 +46,43 @@ def deep_order(g: Node, group_of, is_focal, gar: str = GAR, reedfish: str = REED
             if s <= below[id(n)]:
                 return n
         return g
-    out = dict.fromkeys(DEEP_ORDER)
+
+    def tolerant(group, forbid, must=None):
+        """Some branch (or leaf) holds none of `forbid`, holds `must` if given, and holds at least `tolerance` of the genes of `group`."""
+        need = tolerance * len(group)
+        for n in post:
+            b = below[id(n)]
+            if (forbid & b) or (must is not None and not (must & b)):
+                continue
+            if len(group & b) >= need:
+                return True
+        return False
+    out = {k: None for k in DEEP_ORDER}
+    tol = {k: None for k in DEEP_ORDER}
     bony = coel + tet + gars + reeds + tel
     if shark and len(bony) >= 2:
         out["shark_outside"] = not (ids(shark) & below[id(lca(ids(bony)))])
+        tol["shark_outside"] = tolerant(ids(bony), ids(shark))
     if coel and tet:
         best = min((lca(frozenset([id(c), id(t)])) for c in coel for t in tet), key=lambda n: len(below[id(n)]))
-        out["coelacanth_with_tetrapods"] = not (ids(gars + reeds + tel) & below[id(best)])
+        out["coelacanth_with_tetrapods"] = tol["coelacanth_with_tetrapods"] = not (ids(gars + reeds + tel) & below[id(best)])
     if reeds and gars and tel:
         out["reedfish_outside_gar_teleosts"] = not (ids(reeds) & below[id(lca(ids(gars + tel)))])
+        tol["reedfish_outside_gar_teleosts"] = tolerant(ids(tel), ids(reeds), ids(gars))
     if gars and len({x.sp for x in tel}) >= 2:
         out["gar_outside_teleosts"] = not (ids(gars) & below[id(lca(ids(tel)))])
-    tested = [k for k in DEEP_ORDER if out[k] is not None]
-    passed = [k for k in tested if out[k]]
-    out.update(tested=len(tested), passed=len(passed), score=(round(len(passed) / len(tested), 2) if tested else None))
-    return out
+        tol["gar_outside_teleosts"] = tolerant(ids(tel), ids(gars))
+
+    def score(d):
+        tested = [k for k in DEEP_ORDER if d[k] is not None]
+        passed = [k for k in tested if d[k]]
+        return len(tested), len(passed), (round(len(passed) / len(tested), 2) if tested else None)
+    t, p_, sc = score(out)
+    tt, tp, tsc = score(tol)
+    res = dict(out)
+    res.update(tested=t, passed=p_, score=sc)
+    res["tolerant"] = dict(tol, tested=tt, passed=tp, score=tsc)
+    return res
 
 
 def _own(x: Node, is_focal, focal_species) -> bool:
@@ -174,9 +199,10 @@ def build_record(g: Node, *, method: str, family: str, clade: str, focal_species
               "split_support": sp_support[0] if sp_support else None, "weakest_crown": min(crowns) if crowns else None, "outgroup_inside": len(an.outgroup_inside),
               "stem_ratio": round(max(stems) / min(stems), 2) if len(stems) >= 2 and min(stems) > 0 else None}
     deep = deep_order(g, group_of, is_focal, gar, reedfish)
-    triage["deep_order_score"] = deep["score"]
+    triage["deep_order_score"] = deep["tolerant"]["score"]
+    triage["deep_order_score_strict"] = deep["score"]
     flags = []
-    if deep["tested"] and deep["passed"] < deep["tested"]:
+    if deep["tolerant"]["tested"] and deep["tolerant"]["passed"] < deep["tolerant"]["tested"]:
         flags.append("deep_order_inconsistent")
     if an.mode != "split":
         flags.append("no_split" if an.mode == "single" else "no_teleost_genes")

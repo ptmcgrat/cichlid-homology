@@ -218,3 +218,13 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - Lineages come from the teleost genes alone; the non-teleost genes are the ancestral copy; where an outgroup attaches is reported with its support and never used to label anything.
 - Support is drawn on its own scale and never merged: Ensembl's bootstrap for the Compara reference tree, the placement weight for a placed gene, none for OrthoFinder until its trees carry support
   (to ask project 2: IQ-TREE with ultrafast bootstrap and SH-aLRT, in the run itself if the installed OrthoFinder accepts a custom tree command, else a second pass on its alignments).
+
+
+## 0.22.0: the clade cut and the outgroups
+- Finding (figure pilot, 130 genes): the rule that cut a family at a duplication "with a tetrapod below it" cut teleost duplications whenever the tree nested the tetrapods in one lineage. Of 10 genes named
+  a or b and called single copy, 4 were real ancient paralogs, 1 an older out-paralog (gar and reedfish carry both copies), 2 teleost pairs cut apart, 3 teleost pairs in different families.
+  Of 10 out-paralog genes, 3 were teleost-only.
+- Decision: the principle of the lineage rule applies to the cut: an outgroup is ancestral by species, not by where the tree attaches it. Cut only when both lineages carry non-teleost species;
+  the number required is 1, with 2 as a sensitivity run. The remaining ambiguity (the other reading of a nested outgroup is an older duplication with a copy lost in every non-teleost species) is taken
+  as the teleost duplication, which needs one event where the other needs many losses.
+- Not fixed by this: pairs whose two genes are in different Compara families (3 of 10 here). That needs a step that pairs candidates across families, by synteny and names.

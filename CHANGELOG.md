@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.22.0 (a teleost duplication is not an ancient one just because the tetrapods sit in one lineage)
+- `clade-split`: a duplication is cut as ancient only when each of its two biggest lineages carries at least `--min-outgroup-species` (default 1) species that are not teleosts (tetrapods,
+  coelacanth, shark, gar, reedfish). Why: the figure pilot showed that when the tree nests all the non-teleost genes in one lineage (gnb1, stag2: the other lineage is teleost-only), the old rule
+  cut a teleost duplication in two, so the ohnologs became separate 1:1 clades and the pair was missed, or an out-paralog was called where there is a teleost pair (wnt7ba, pi4kab, loxl2a). A
+  duplication whose tetrapod-free lineage still holds gar or reedfish is older than the gar split (pdap1) and is still cut; an ancient paralogy with outgroups on both sides (stk17, dagl) too.
+  `--min-outgroup-species 0` gives the rule of 0.16 to 0.21; 2 is the sensitivity run. `figure-pilot` takes the same option so that the clade ids of the gene table apply.
+- Deep order: each of the four known relationships is tested strictly and tolerantly (some branch without the outgroup holds 90% of the genes of the group). The strict test failed in half of the clades
+  because one stray teleost gene is enough; the tolerant one never passes fewer clades. The score, the flag `deep_order_inconsistent` and the figure use the tolerant one; the record keeps both.
+- The pilot tally counts clades, not genes (the "72% attach to the slower lineage" figure was 126 genes from 9 clades; by clade it was 5 of 9). New `strata` summary: per stratum, the clades with a
+  teleost split, a later split and no split.
+- A gene placed on the branch that leads to its clade (not inside it) is drawn on the stem with a marker.
+- `compare-tables` has a section for the genes named a and b: how many are partners, in the same clade, in the same family or in different families, before and after.
+  229 offline tests.
+
 ## 0.21.1 (is the deep order of the tree right?)
 - Each clade record carries `deep_order`: whether the tree recovers the four relationships we know (shark outside the bony fishes; coelacanth with the tetrapods; reedfish outside gar and the
   teleosts; gar outside the teleosts), tested only where the species are present, with a score. Why: the position of a single gar or reedfish gene is unreliable (short internal branches, long

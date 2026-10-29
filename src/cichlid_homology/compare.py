@@ -86,6 +86,7 @@ def compare_gene_tables(old, new) -> dict:
     res["pairs"] = {"old": len(po), "new": len(pn), "kept": len(kept), "lost": len(lost_pairs), "gained": len(gained_pairs), "lost_only_because_a_clade_is_missing": cover_pairs,
                     "kept_with_a_different_status": sum(1 for k in kept if po[k] != pn[k]),
                     "genes_with_a_different_partner": sum(1 for gid in both if o[gid].get("ohnolog_gene") and n[gid].get("ohnolog_gene") and o[gid]["ohnolog_gene"] != n[gid]["ohnolog_gene"])}
+    res["name_pairs"] = compare_name_pairs(old, new)
     res["changed_genes"] = {gid: {c: list(v) for c, v in ch.items()} for gid, ch in changed.items()}
     return res
 
@@ -95,6 +96,39 @@ def clade_coverage(rows, clade_rows) -> dict:
     ids = {f"{r['family']}:{r['group']}" for r in clade_rows}
     used = {r["clade_id"] for r in rows if r.get("clade_id")}
     return {"clade_ids_in_the_gene_table": len(used), "not_in_the_clade_table": len(used - ids)}
+
+
+def name_pairs(rows: dict) -> dict:
+    """{stem: (gene a, gene b)} for genes named a stem plus a and the same stem plus b, one gene each, both with a real symbol (not LOC)."""
+    by = collections.defaultdict(lambda: collections.defaultdict(list))
+    for g, r in rows.items():
+        sym = (r.get("symbol") or "").lower()
+        if sym and not sym.startswith("loc") and len(sym) > 3 and sym[-1] in "ab":
+            by[sym[:-1]][sym[-1]].append(g)
+    return {stem: (d["a"][0], d["b"][0]) for stem, d in by.items() if len(d["a"]) == 1 and len(d["b"]) == 1}
+
+
+def pair_kind(rows: dict, a: str, b: str) -> str:
+    ra, rb = rows[a], rows[b]
+    if ra.get("ohnolog_gene") == b and rb.get("ohnolog_gene") == a:
+        return "partners (a pair of ours)"
+    if ra.get("family") != rb.get("family"):
+        return "different families"
+    if ra.get("clade_id") and ra.get("clade_id") == rb.get("clade_id"):
+        return "same clade, not partners"
+    return "same family, different clades"
+
+
+def compare_name_pairs(old, new) -> dict:
+    """How the a/b named pairs (the ones a zebrafish-style name says may be ohnologs) are classified in the old and the new gene table, and how many move from one kind to another."""
+    o, n = {r["gene_id"]: r for r in old}, {r["gene_id"]: r for r in new}
+    pairs = {k: v for k, v in name_pairs(o).items() if v[0] in n and v[1] in n}
+    tr = collections.Counter()
+    for stem, (a, b) in pairs.items():
+        tr[(pair_kind(o, a, b), pair_kind(n, a, b))] += 1
+    kinds_old = collections.Counter(k[0] for k in tr.elements())
+    kinds_new = collections.Counter(k[1] for k in tr.elements())
+    return {"pairs": len(pairs), "old": dict(kinds_old), "new": dict(kinds_new), "transitions": [[a, b, k] for (a, b), k in tr.most_common()]}
 
 
 def compare_clades(old, new) -> dict:
@@ -129,6 +163,10 @@ def report_text(res, clades=None) -> str:
     for c, d in sorted(res["columns"].items(), key=lambda kv: -kv[1]["changed"]):
         L += [f"### {c} ({d['group']}): {d['changed']} genes change", ""]
         L += [f"- {a or '(empty)'} to {b or '(empty)'}: {k}" for a, b, k in d["transitions"][:8]] + [""]
+    if res.get("name_pairs"):
+        npr = res["name_pairs"]
+        L += ["## Genes named a and b (a zebrafish-style name says they may be ohnologs)", "", f"{npr['pairs']} pairs with one gene of each name in both tables.", "",
+              "| before | after | pairs |", "|---|---|---|"] + [f"| {a} | {b} | {k} |" for a, b, k in npr["transitions"]] + [""]
     if clades:
         L += ["## Clade tables", "", json.dumps(clades, indent=1), ""]
     return "\n".join(L)

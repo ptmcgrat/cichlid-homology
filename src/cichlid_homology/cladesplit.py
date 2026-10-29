@@ -10,7 +10,10 @@ reconciliation duplication), (2) its two largest children share at least `pair_o
 that separates a duplication from a gene tree that disagrees with the species tree), and (3) species of both tetrapods
 (sarcopterygians without the coelacanth) lie below it, and either reference teleosts lie below it too or the duplication is
 older than the amniote split (its species-tree node is the amniote ancestor or older: a paralog lost in every fish is still
-cut). Duplications inside the tetrapods younger than that (human-specific duplicates, for one) and inside the teleosts only
+cut), and (4, since 0.22) each of the two biggest lineages carries at least `min_outgroup` species that are not teleosts (tetrapods, coelacanth,
+shark, gar, reedfish). A teleost duplication whose non-teleost genes all sit in one lineage (the tree nests the tetrapods, the gar and the shark in
+the slower copy) is not an ancient duplication: it stays in one clade and its two lineages are found later (`lineages.py`). A duplication whose
+tetrapod-free lineage still holds gar or reedfish is older than the gar split and is cut. `min_outgroup=0` gives the rule of 0.16 to 0.21. Duplications inside the tetrapods younger than that (human-specific duplicates, for one) and inside the teleosts only
 (the teleost genome duplication) are not cut: they stay in the clade and are counted. No other cutoff is used: the scores are
 reported, not thresholded.
 
@@ -111,7 +114,7 @@ def _stats(vals):
     return med, cv
 
 
-def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, already_rooted=True, profiles=None, group_leaves=None):
+def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, already_rooted=True, profiles=None, group_leaves=None, min_outgroup=1):
     """(family row, [group rows]) for one reference family tree, or None when nothing is left of it."""
     root = parse_newick(newick)
     sp_of = {x.name: ls.species(x.name) for x in leaves(root)}
@@ -151,10 +154,17 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
     def supported(v):
         return bool(v.children) and T.M[id(v)] is not None and T.dup(v) and _overlap(T, v) >= pair_overlap
 
+    def both_carry_outgroups(v):                                      # each of the two biggest lineages holds at least `min_outgroup` species that are not teleosts
+        if min_outgroup <= 0:
+            return True
+        inf = [c for c in v.children if T.M[id(c)] is not None]
+        big = sorted(inf, key=lambda c: -T.n_species(c))[:2]
+        return len(big) == 2 and all(_bits(T.smask[id(c)] & ~tel_mask) >= min_outgroup for c in big)
+
     ancient, has = {}, {}
     n_anc = 0
     for v in postorder(rt.root):
-        a = supported(v) and bool(T.smask[id(v)] & tet_mask) and (bool(T.smask[id(v)] & tel_mask) or deep(v))
+        a = supported(v) and bool(T.smask[id(v)] & tet_mask) and (bool(T.smask[id(v)] & tel_mask) or deep(v)) and both_carry_outgroups(v)
         n_anc += a
         ancient[id(v)] = a
         has[id(v)] = a or any(has[id(c)] for c in v.children)
@@ -236,7 +246,7 @@ def split_family(fid, newick, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5
     return fam, rows
 
 
-def run_split(prepared, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, only_human=True, limit=0, progress=None, already_rooted=True, profiles=None):
+def run_split(prepared, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, only_human=True, limit=0, progress=None, already_rooted=True, profiles=None, min_outgroup=1):
     prepared = Path(prepared)
     files, _ = reference_files(prepared / "trees")
     ids = sorted(f for f, d in files.items() if "tree" in d)
@@ -252,7 +262,7 @@ def run_split(prepared, ls, st, clades, ctx, names=NAMES, pair_overlap=0.5, only
                 skipped += 1
                 continue
         try:
-            r = split_family(fid, text, ls, st, clades, ctx, names, pair_overlap, already_rooted, profiles)
+            r = split_family(fid, text, ls, st, clades, ctx, names, pair_overlap, already_rooted, profiles, None, min_outgroup)
         except Exception as e:
             errors.append((fid, f"{type(e).__name__}: {e}"[:160]))
             continue

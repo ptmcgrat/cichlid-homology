@@ -100,7 +100,8 @@ def test_the_pilot_makes_a_record_and_a_figure_per_clade_with_support_and_our_ge
     assert "published_pair" in (out / "figure_index.html").read_text()
     t = summary["tally"]
     assert t["split_clades"] == 1 and set(t["deep_order"]) == {"shark_outside", "coelacanth_with_tetrapods", "reedfish_outside_gar_teleosts", "gar_outside_teleosts"}
-    assert t["outgroup_inside_slower_lineage"] == {"tested": 0, "slower": 0, "share": None} and rec["deep_order"]["tested"] == 0          # the fake species are not shark, gar or reedfish
+    assert t["outgroup_inside_slower_lineage"] == {"clades_tested": 0, "slower": 0, "share": None} and rec["deep_order"]["tested"] == 0          # the fake species are not shark, gar or reedfish
+    assert t["clades"] == 1 and set(t["deep_order_tolerant"]) == set(t["deep_order"]) and summary["strata"]["published_pair"]["teleost_split"] == 2 and summary["min_outgroup_species"] == 1
 
 
 def test_without_the_dump_there_is_no_support_and_the_record_says_so(tmp_path):
@@ -124,5 +125,29 @@ def test_the_record_of_a_clade_with_no_split_is_one_lineage_and_draws(tmp_path):
     rec = build_record(root, method="Compara", family="F", clade="F:G1", focal_species="maylandia_zebra", is_focal=lambda n: n.startswith("Mzeb"), clades=Clades(), panel=["homo_sapiens", "locu", "aang"],
                        species_labels={}, support=None)
     assert rec["mode"] == "single" and rec["letters"] == ["A"] and "no_split" in rec["flags"] and rec["genes"][0]["lineage"] == "A"
+    from cichlid_homology.figrender import render_record
+    assert render_record(rec, tmp_path / "x.png", dpi=50).stat().st_size > 3000
+
+
+def _rec(inside, stems):
+    return {"mode": "split", "deep_order": {"tolerant": {}}, "strip": {"species": [], "counts": []}, "split": {"kind": "teleost"}, "flags": [],
+            "lineages": [{"id": i, "stem": v} for i, v in zip("AB", stems)], "outgroup": {"inside": [{"species": sp, "lineage": ln} for sp, ln in inside], "outside": []}}
+
+
+def test_the_tally_counts_clades_not_genes():
+    recs = [_rec([("lepisosteus_oculatus", "A")] * 30 + [("erpetoichthys_calabaricus", "A")] * 5, (0.1, 0.3)),               # one big clade, 35 genes inside the slower lineage
+            _rec([("lepisosteus_oculatus", "B")], (0.1, 0.3)), _rec([("lepisosteus_oculatus", "B")], (0.1, 0.3)), _rec([], (0.1, 0.3))]
+    t = figpilot.tally(recs)
+    assert t["clades_with_an_outgroup_inside_a_lineage"] == 3 and t["outgroup_inside_by_species_in_clades"] == {"lepisosteus_oculatus": 3, "erpetoichthys_calabaricus": 1}
+    assert t["outgroup_inside_slower_lineage"] == {"clades_tested": 3, "slower": 1, "share": 0.333}                      # by gene it would have been 35 of 37
+
+
+def test_a_gene_placed_above_its_clade_is_drawn_on_the_stem(tmp_path):
+    root = parse_newick("((Hsap_1,Mmus_1),(Locu_1,(Aang_1,Drer_1)));")
+    for x in leaves(root):
+        x.sp = PREFIX2SP[x.name.split("_")[0]]
+    rec = build_record(root, method="Compara", family="F", clade="F:G1", focal_species="maylandia_zebra", is_focal=lambda n: n.startswith("Mzeb"), clades=Clades(), panel=["homo_sapiens", "locu", "aang"],
+                       species_labels={}, support=None)
+    rec["genes"].append({"gene": "Mzeb_9", "species": "maylandia_zebra", "lineage": "outside the clade", "lwr": "0.7", "status": "placed", "n_placements": 2, "calls": {"symbol": "geneZ"}})
     from cichlid_homology.figrender import render_record
     assert render_record(rec, tmp_path / "x.png", dpi=50).stat().st_size > 3000

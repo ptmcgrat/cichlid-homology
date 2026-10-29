@@ -187,4 +187,17 @@ def test_a_relationship_is_tested_only_when_its_species_are_there_and_the_real_i
         def lineage(self, s):
             return {"tetrapod": "sarcopterygian", "coelacanth": "sarcopterygian", "cartilaginous fish": "chondrichthyan"}.get(pan[s]["group"], "actinopterygian")
     d = deep_order(root, lambda sp: group_label(sp, C(), "latimeria_chalumnae"), lambda n: False)
-    assert d == {"shark_outside": True, "coelacanth_with_tetrapods": True, "reedfish_outside_gar_teleosts": False, "gar_outside_teleosts": False, "tested": 4, "passed": 2, "score": 0.5}
+    assert d["score"] == 0.5 and (d["tested"], d["passed"]) == (4, 2) and d["gar_outside_teleosts"] is False and d["reedfish_outside_gar_teleosts"] is False
+    assert d["tolerant"]["score"] == 0.5 and d["tolerant"]["gar_outside_teleosts"] is False                     # a real inside-lineage case is not rescued by the tolerance
+
+
+def test_one_stray_teleost_gene_breaks_the_strict_test_but_not_the_tolerant_one():
+    D = ",".join(f"danio_rerio#{i}" for i in range(1, 10))
+    nw = f"(callorhinchus_milii#1,((latimeria_chalumnae#1,homo_sapiens#1),((erpetoichthys_calabaricus#1,(lepisosteus_oculatus#1,({D}))),gasterosteus_aculeatus#1)));"
+    d = _deep(nw)
+    assert d["gar_outside_teleosts"] is False and d["reedfish_outside_gar_teleosts"] is False and d["score"] == 0.5             # strict: the stray gene puts gar inside the teleost clade
+    t = d["tolerant"]
+    assert t["gar_outside_teleosts"] is True and t["reedfish_outside_gar_teleosts"] is True and t["shark_outside"] is True and t["score"] == 1.0
+    two = ",".join(f"danio_rerio#{i}" for i in range(1, 6)) + ",gasterosteus_aculeatus#1,gasterosteus_aculeatus#2,gasterosteus_aculeatus#3"
+    d = _deep(f"(callorhinchus_milii#1,((latimeria_chalumnae#1,homo_sapiens#1),(erpetoichthys_calabaricus#1,((lepisosteus_oculatus#1,(danio_rerio#6,danio_rerio#7)),({two})))));")
+    assert d["tolerant"]["gar_outside_teleosts"] is False                                                                   # gar inside half of the teleosts is not a stray gene

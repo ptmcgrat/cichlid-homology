@@ -106,18 +106,19 @@ def render_record(rec: dict, path, dpi: int = 110, fmt: str = "png"):
         sub = "No teleost gene in this clade."
     fig.text(0.015, 1 - 0.60 / H, sub, fontsize=9.3, ha="left", va="center", color=MUTED)
     d = rec.get("deep_order") or {}
-    if d.get("tested"):
+    dt = d.get("tolerant") or {}
+    if dt.get("tested"):
         names = {"shark_outside": "shark outside the bony fishes", "coelacanth_with_tetrapods": "coelacanth with the tetrapods", "reedfish_outside_gar_teleosts": "reedfish outside gar and teleosts",
                  "gar_outside_teleosts": "gar outside the teleosts"}
-        failed = [names[k] for k in names if d.get(k) is False]
-        fig.text(0.015, 1 - 0.88 / H, f"Known deep order recovered: {d['passed']} of {d['tested']} tested" + (f" (not: {'; '.join(failed)})" if failed else ""), fontsize=8.6, ha="left", va="center",
-                 color=("#b00020" if failed else MUTED))
+        failed = [names[k] for k in names if dt.get(k) is False]
+        fig.text(0.015, 1 - 0.88 / H, f"Known deep order recovered (tolerating 10% stray genes): {dt['passed']} of {dt['tested']} tested" + (f"; not: {'; '.join(failed)}" if failed else "")
+                 + (f"   [strict: {d['passed']} of {d['tested']}]" if d["passed"] != dt["passed"] else ""), fontsize=8.6, ha="left", va="center", color=("#b00020" if failed else MUTED))
     if rec["flags"]:
         fig.text(0.015, 1 - 1.14 / H, "flags: " + ", ".join(rec["flags"]), fontsize=8.2, ha="left", va="center", color="#b00020")
     # ---------------- panel A: the collapsed tree
     axA = ax(0.2, 0.45 + Hs, 9.4, Hz)
     axA.axis("off")
-    axA.set_xlim(-0.3, 17.5)
+    axA.set_xlim(-1.8 if any(g.get("lineage") == "outside the clade" for g in genes) else -0.3, 17.5)
     axA.set_ylim(R - 0.4 + 0.2, -0.8)
     for n in _iter(tree):
         if n["k"] != "node":
@@ -148,6 +149,13 @@ def render_record(rec: dict, path, dpi: int = 110, fmt: str = "png"):
             col = _color(n["label"]) if n["label"] in COLORS else GREY
             axA.add_patch(Polygon([[XTIP - TRI_W, y], [XTIP, y - h], [XTIP, y + h]], closed=True, facecolor=col, edgecolor=col, alpha=0.85, zorder=3))
             axA.text(XTIP + 0.3, y, txt, va="center", ha="left", fontsize=7.8, color=INK, fontweight="bold" if bold else None, linespacing=1.15)
+    outs = [g for g in genes if g.get("lineage") == "outside the clade"]
+    if outs:                                                    # a gene placed on the branch that leads to the clade, not inside it
+        ry, rx = tree["_y"], xend(tree)
+        axA.plot([rx - 1.5, rx], [ry, ry], color="#c79200", lw=1.8, ls=(0, (3, 2)), zorder=5)
+        axA.plot([rx - 1.5], [ry], marker="*", ms=13, color="#c79200", markeredgecolor=INK, markeredgewidth=0.7, zorder=6)
+        syms = ", ".join((g.get("calls", {}).get("symbol") or g["gene"]) for g in outs[:3]) + (" ..." if len(outs) > 3 else "")
+        axA.text(-1.8, -0.55, f"\u2605 {syms}: placed on the branch above this clade, not inside it", fontsize=7.8, ha="left", va="center", color="#8a6500", fontweight="bold")
     for n in inner:
         if n.get("split"):
             axA.plot([n["_x"]], [n["_y"]], marker="*", ms=17, color="#f2c230", markeredgecolor=INK, markeredgewidth=0.8, zorder=6)

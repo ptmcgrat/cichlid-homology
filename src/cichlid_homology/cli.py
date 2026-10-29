@@ -192,7 +192,7 @@ def _clade_split(args) -> int:
     profiles = None if args.no_species_profiles else []
     fams, groups, errors, skipped = C.run_split(prepared, ls, st, clades, ParsimonyContext(st, clades), pair_overlap=args.pair_overlap,
                                                 only_human=not args.all_families, limit=args.limit, already_rooted=(args.rooting == "auto"),
-                                                progress=lambda i, n: print(f"  {i} families", flush=True), profiles=profiles)
+                                                progress=lambda i, n: print(f"  {i} families", flush=True), profiles=profiles, min_outgroup=args.min_outgroup_species)
     out = Path(args.out).expanduser() if args.out else default_out("clade_split")
     out.mkdir(parents=True, exist_ok=True)
     for name, cols, rows in (("families", C.FAMILY_COLS, fams), ("groups", C.GROUP_COLS, groups)):
@@ -201,7 +201,7 @@ def _clade_split(args) -> int:
             w.writeheader()
             w.writerows(rows)
     summ = C.summarize_split(fams, groups, errors, skipped)
-    summ.update(cichlid_homology=__version__, part=args.part, pair_overlap=args.pair_overlap, rooting=args.rooting)
+    summ.update(cichlid_homology=__version__, part=args.part, pair_overlap=args.pair_overlap, rooting=args.rooting, min_outgroup_species=args.min_outgroup_species)
     if profiles:                                                     # species profiles of the clades with a teleost duplication node
         from cichlid_data.master_tree import load_master_tree
 
@@ -325,7 +325,7 @@ def _figure_pilot(args) -> int:
     summary = run_figure_pilot(genes=genes, rows=rows, prepared=prepared, froot=froot, placement=placement, prefixes=prefixes, load_family=load_family,
                                load_ls=lambda names: load_leaf_species(layout, "Compara", only=names), st=st, clades=clades, master_newick=newick_of(load_master_tree()), out_dir=out,
                                dump=Path(args.dump).expanduser() if args.dump else None, workers=args.workers, dpi=args.dpi, fmt=args.format,
-                               progress=lambda m: print(m, flush=True))
+                               progress=lambda m: print(m, flush=True), min_outgroup=args.min_outgroup_species)
     print(json.dumps({k: v for k, v in summary.items() if k not in ("errors", "figure_errors")}, indent=1, default=str))
     if summary["errors"] or summary["figure_errors"]:
         print(f"{len(summary['errors'])} family errors and {len(summary['figure_errors'])} figure errors: see {out / 'figure_pilot.json'}")
@@ -462,6 +462,7 @@ def main(argv=None) -> int:
     fp.add_argument("--prepared", default=None, help="the reference trees: .../Compara116/prepared (default: from the coordinator)")
     fp.add_argument("--dump", default=None, help="the raw Compara dump Compara.<release>.protein_default.nhx.emf.gz, for the support values (optional)")
     fp.add_argument("--species", default="Mzeb", help="the focal species prefix")
+    fp.add_argument("--min-outgroup-species", type=int, default=1, help="the same rule as `clade-split`, so that the clade ids of the gene table apply")
     fp.add_argument("--per-stratum", type=int, default=10, help="genes drawn from each stratum of the sample")
     fp.add_argument("--genes", default=None, help="a file of gene ids to add (one per line)")
     fp.add_argument("--only-genes", action="store_true", help="draw only the genes of --genes")
@@ -497,6 +498,7 @@ def main(argv=None) -> int:
                     help="auto: keep a tree's own root when it has two children; reconcile: always root by reconciliation")
     cs.add_argument("--pair-overlap", type=float, default=0.5, help="share of species two sides must have in common to be a duplication")
     cs.add_argument("--all-families", action="store_true", help="also the families without a human gene (default: only those with one)")
+    cs.add_argument("--min-outgroup-species", type=int, default=1, help="species that are not teleosts that each of the two lineages of an ancient duplication must carry (0: the rule of 0.16 to 0.21)")
     cs.add_argument("--no-species-profiles", action="store_true", help="skip the species profiles of the clades with a teleost duplication node")
     cs.add_argument("--limit", type=int, default=0, help="only the first N families (a quick test)")
     cs.add_argument("--out", default=None, help="default: ~/share/clade_split_<version>_<timestamp>")

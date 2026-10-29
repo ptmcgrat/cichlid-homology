@@ -165,3 +165,32 @@ def test_the_summary_tabulates_the_trend_against_the_zebrafish_genes(tmp_path):
     assert one["trends"]["1:1"]["zebrafish_genes"] == {"0": 0, "1": 1, "2": 0, "3+": 0}
     assert one["trends"]["1:2"]["zebrafish_genes"]["2"] == 1 and one["trends"]["mixed 1-2"]["clades"] == 1
     assert "Teleost trend" in report_split_text(s, "Compara")
+
+
+def run_n(newick, n, fid="F"):
+    sp, cl = st(), Clades()
+    return split_family(fid, newick, LS(), sp, cl, ParsimonyContext(sp, cl), NAMES, min_outgroup=n)
+
+
+TEL5 = "Aang_{0},Drer_{0},Trub_{0},Gacu_{0},Olat_{0}"
+
+
+def test_a_teleost_duplication_whose_outgroups_all_sit_in_one_lineage_is_not_cut():
+    nw = f"(((Hsap_1,Mmus_1),(Locu_1,({TEL5.format(1)}))),({TEL5.format(2)}));"                  # gnb1: tetrapods and gar nested in one lineage, the other is teleost-only
+    fam, groups = run_n(nw, 1)
+    assert (fam["n_groups"], fam["n_ancient_dups"]) == (1, 0) and groups[0]["n_teleost_species"] == 5 and groups[0]["teleost_mean_genes"] == 2.0
+    fam, groups = run_n(nw, 0)                                                                      # the rule of 0.16 to 0.21 cut it
+    assert (fam["n_groups"], fam["n_ancient_dups"]) == (2, 1)
+
+
+def test_a_duplication_older_than_the_gar_split_is_cut_because_the_tetrapod_free_lineage_still_holds_gar():
+    nw = f"(((Hsap_1,Mmus_1),(Locu_1,({TEL5.format(1)}))),(Locu_2,({TEL5.format(2)})));"          # pdap1: gar in both lineages, tetrapods in one
+    assert run_n(nw, 1)[0]["n_groups"] == 2
+    assert run_n(nw, 2)[0]["n_groups"] == 1                                                         # with two non-teleost species required, the gar alone is not enough
+    assert run_n(nw, 0)[0]["n_groups"] == 2
+
+
+def test_an_ancient_paralogy_with_tetrapods_and_fish_on_both_sides_is_cut_at_any_setting():
+    nw = f"((Hsap_1,(Locu_1,({TEL5.format(1)}))),(Mmus_1,(Locu_2,({TEL5.format(2)}))));"
+    for n in (0, 1, 2):
+        assert run_n(nw, n)[0]["n_groups"] == 2
