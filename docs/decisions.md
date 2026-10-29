@@ -200,3 +200,12 @@ large clades (expanded families), and whether to tell the coordinator that the s
 - Design: a species-tree profile (a species tree on the left, columns for the ancestral copy, ohnolog A and ohnolog B on the right, a count per cell), and an overview of
   all pairs by species. A hollow cell is a lost copy or an annotation gap; a count of two or more in a lineage is a later duplicate; a duplication shared by a clade is
   a bracket. Only M. zebra among the cichlids is in the Compara panel; the other cichlids come with OrthoFinder.
+
+
+## 0.20.1: the resolved master species tree
+- Coordinator v0.14.2 (Dispatch 8) resolved the fish polytomies where a published phylogeny supports it: the teleost root, Ovalentaria and Cichlidae are binary; Denticeps
+  is sister to Clupea; Myripristis is sister to Percomorpha; Amphilophus and Archocentrus pair; the loose percomorphs are grouped into Eupercaria, Carangaria and Anabantaria.
+  Six polytomies remain on purpose (Percomorpha, Eupercaria, Carangaria, the tetra, catfish and electric eel node, the haplochromine node of Haplochromis, the Malawi pair and
+  Pundamilia, and the killifish node with Cyprinodon). A speciation that falls on one of them can read as a duplication, so a call that rests on such a node is lower confidence.
+  Myripristis keeps the ladder level teleost. A duplicate carried by M. zebra, A. calliptera and Pundamilia now meets at the four-species haplochromine node (B2).
+- The owner is told how many calls change by rerunning the pilot, the clade split and the gene table on the new tree and comparing with `compare-tables`.

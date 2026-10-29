@@ -263,6 +263,19 @@ def _gene_table(args) -> int:
     return 0
 
 
+def _compare_tables(args) -> int:
+    """How many calls change between two gene tables (for example before and after a new master species tree)."""
+    from . import compare as K
+
+    res = K.compare_gene_tables(K.read(args.old), K.read(args.new))
+    clades = K.compare_clades(K.read(args.old_clades), K.read(args.new_clades)) if args.old_clades and args.new_clades else None
+    out = Path(args.out).expanduser() if args.out else default_out("compare")
+    K.write_outputs(out, res, clades)
+    print(K.report_text({k: v for k, v in res.items() if k != "changed_genes"}, clades))
+    print(f"\nwritten to {out}")
+    return 0
+
+
 def _pilot(args) -> int:
     from cichlid_data import Catalog, get_layout
     from cichlid_data.clades import Clades
@@ -387,6 +400,13 @@ def main(argv=None) -> int:
     s2.add_argument("--n-denovo", type=int, default=100)
     s2.add_argument("--out", default=None)
     s2.set_defaults(func=_survey2)
+    ct = sub.add_parser("compare-tables", help="how many calls change between two gene tables (read-only)")
+    ct.add_argument("--old", required=True, help="the earlier gene_table.<species>.tsv")
+    ct.add_argument("--new", required=True, help="the later gene_table.<species>.tsv")
+    ct.add_argument("--old-clades", default=None, help="the earlier clade_split.<part>.groups.tsv (optional)")
+    ct.add_argument("--new-clades", default=None, help="the later clade_split.<part>.groups.tsv (optional)")
+    ct.add_argument("--out", default=None, help="default: ~/share/compare_<version>_<timestamp>")
+    ct.set_defaults(func=_compare_tables)
     gt = sub.add_parser("gene-table", help="the focal species' gene table: closest genes, clade, teleost trend, B1 call and ohnolog (read-only)")
     gt.add_argument("--compara", required=True, help="pilot_genes.Compara.tsv of the pilot run")
     gt.add_argument("--treefam", default=None, help="pilot_genes.TreeFam.tsv (for the agreement columns)")
