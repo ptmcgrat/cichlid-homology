@@ -27,8 +27,8 @@ def table(rows, groups, **kw):
     return {r["gene_id"]: r for r in build_gene_table(rows, kw.pop("treefam", []), groups, FAM, version="9.9", run_date="d", **kw)}
 
 
-def test_the_table_has_68_documented_columns_in_order():
-    assert len(COLUMNS) == len(COLUMN_SPEC) == 68 and COLUMNS[0] == "gene_id" and COLUMNS[-1] == "parameters"
+def test_the_table_has_73_documented_columns_in_order():
+    assert len(COLUMNS) == len(COLUMN_SPEC) == 73 and COLUMNS[0] == "gene_id" and COLUMNS[-1] == "parameters"
     assert COLUMNS.index("ev_synteny") == COLUMNS.index("ev_zebrafish_split") + 1
     assert "## Ohnolog" in columns_markdown()
 

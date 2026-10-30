@@ -228,3 +228,13 @@ large clades (expanded families), and whether to tell the coordinator that the s
   the number required is 1, with 2 as a sensitivity run. The remaining ambiguity (the other reading of a nested outgroup is an older duplication with a copy lost in every non-teleost species) is taken
   as the teleost duplication, which needs one event where the other needs many losses.
 - Not fixed by this: pairs whose two genes are in different Compara families (3 of 10 here). That needs a step that pairs candidates across families, by synteny and names.
+
+
+## 0.23.0: lineage-aware pairing (step 1 of the final analysis)
+- Owner decisions: the ladder thresholds are agreed (both copies in at least two deep teleost clades; gar and reedfish at most one); cichlid-specific is one class (no separate M. zebra-specific class);
+  step 1 first (lineage-aware pairing, the gar and reedfish exclusion, the lineage signal of the pair confidence).
+- Lineages come from the records of `figure-pilot` (a gene's place in the clade tree), not from the copy-number counts. The count rule stays for clades without a teleost split.
+- Pair rule in a clade with a teleost split: one gene per lineage is a pair; with more, the cross-lineage combination on the chromosome pair that carries most firm pairs (at least `synteny_min_pairs`);
+  ties by the zebrafish anchor of each lineage, then the placement weight; the rest are in-paralogs of the paired gene; no support: ambiguous with candidates listed.
+- Gar or reedfish with a gene in each lineage: the pair is older than the teleost duplication (it is a real pair, but not a teleost ohnolog) and is kept out of the synteny of the teleost pairs.
+- Not decided yet: the anchor fallback order for the dating (step 2).

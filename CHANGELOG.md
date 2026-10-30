@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.23.0 (lineage-aware pairing; older duplicates are not teleost ohnologs)
+- `lineagepairs.py` and `gene-table --records clade_records.jsonl` (the records of `figure-pilot --all --no-figures`): in a clade that has a teleost split, our genes take the lineage of their place
+  in the tree (A or B), and the pair is the cross-lineage combination whose chromosome pair carries most of our other firm pairs (at least `synteny_min_pairs`); ties are broken by the zebrafish gene that
+  anchors each lineage and then by the placement weight; the other genes of a lineage are in-paralogs of the paired gene (`in_paralog_of`). Why: the count rule called a clade with three or more of our
+  genes ambiguous or an expansion, and 78 of the published strict pairs we missed were there, 95% of them on a chromosome pair as well supported as the pairs we found. Without synteny support the clade
+  stays ambiguous with its candidates listed; genes in one lineage only are a lost partner or in-paralogs of that lineage.
+- If gar or reedfish carry a gene in each lineage the duplication is older than the teleost duplication: the pair gets the status "older duplicate pair" and `duplication_class` says so; it does not count
+  for the synteny of the teleost pairs. (42 clades in the 0.22.0 run, 5% of them published.)
+- The lineage signal of the pair confidence is rebuilt from these lineages (different lineages, both genes placed at a weight of 0.5 or more); the old one came from the dating of the placed tree and failed
+  when the outgroups were nested in a lineage (62% of the medium-confidence clades).
+- New command `compare-published`: recall and precision of our pairs against the published zebrafish pairs (OHNOLOGS v2) at the strict, intermediate and relaxed levels, before and after (`--old`); recall is
+  of the represented pairs (both zebrafish genes have a gene of ours), with the pairs that are ours but whose two genes are closest to one zebrafish gene counted apart.
+- Five new columns (73 in all): `lineage`, `lineage_basis`, `in_paralog_of`, `duplication_class`, `older_evidence`; the table summary counts the duplication classes and the lineages. 246 offline tests.
+
 ## 0.22.1 (where the outgroups fall relative to the two teleost lineages)
 - New command `outgroup-summary` (read-only, from `clade_records.jsonl`): for every clade with a teleost split that holds one of our pairs, where gar, reedfish, shark, coelacanth and the tetrapods
   (together) are: absent, outside both lineages (the expected place), inside one lineage (with the slower or the faster one), in both lineages (a gene in each: the species carries both copies), or mixed.

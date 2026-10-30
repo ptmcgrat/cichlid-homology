@@ -240,6 +240,12 @@ def _gene_table(args) -> int:
                                reassign=args.reassign, focal_prefix=args.species)
     out = Path(args.out).expanduser() if args.out else default_out("gene_table")
     out.mkdir(parents=True, exist_ok=True)
+    lp = None
+    if args.records:                                                 # lineage-aware pairing from the records of `figure-pilot`
+        from . import lineagepairs as LP
+
+        lp = LP.apply(rows, LP.load_records(args.records), partners, GT.DEFAULTS)
+        (out / "lineage_pairs.json").write_text(json.dumps({**lp, "records": str(args.records)}, indent=1))
     import csv
     with open(out / f"gene_table.{args.species}.tsv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=GT.COLUMNS, delimiter="\t")
@@ -247,6 +253,8 @@ def _gene_table(args) -> int:
         w.writerows(rows)
     summ = GT.summarize_table(rows)
     summ["cichlid_homology"] = __version__
+    if lp:
+        summ["lineage_pairs"] = {k: v for k, v in lp.items() if k != "status_transitions"}
     if positions:                                                    # the chromosome pairs need the positions
         cp, ch = GT.chromosome_tables(rows)
         for name, tab in (("chromosome_pairs", cp), ("chromosomes", ch)):
@@ -343,6 +351,25 @@ def _outgroup_summary(args) -> int:
     out = Path(args.out).expanduser() if args.out else default_out("outgroup_summary")
     s = O.write_outputs(out, recs, pairs_only=not args.all_splits)
     print(O.report_text(s))
+    print(f"\nwritten to {out}")
+    return 0
+
+
+def _compare_published(args) -> int:
+    """Our pairs against the published zebrafish pairs (OHNOLOGS v2): recall by level and precision (read-only)."""
+    from . import published as PB
+
+    pubs = PB.load_zebrafish_pairs(Path(args.ohnologs).expanduser())
+    res = {}
+    for name, path in (("old", args.old), ("new", args.gene_table)):
+        if path:
+            rows = PB.read(path)
+            res[name if args.old else "gene table"] = {"recall": {l: PB.recall(rows, p) for l, p in pubs.items()}, "precision": PB.precision(rows, pubs)}
+    out = Path(args.out).expanduser() if args.out else default_out("compare_published")
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "compare_published.md").write_text(PB.report_text(res))
+    (out / "compare_published.json").write_text(json.dumps(res, indent=1))
+    print(PB.report_text(res))
     print(f"\nwritten to {out}")
     return 0
 
@@ -494,6 +521,12 @@ def main(argv=None) -> int:
     og.add_argument("--all-splits", action="store_true", help="every clade with a teleost split, not only those that hold one of our pairs")
     og.add_argument("--out", default=None, help="default: ~/share/outgroup_summary_<version>_<timestamp>")
     og.set_defaults(func=_outgroup_summary)
+    cpb = sub.add_parser("compare-published", help="our pairs against the published zebrafish pairs (OHNOLOGS v2): recall and precision (read-only)")
+    cpb.add_argument("--gene-table", required=True, help="gene_table.<species>.tsv")
+    cpb.add_argument("--old", default=None, help="an earlier gene table, to put before and after side by side")
+    cpb.add_argument("--ohnologs", required=True, help="the folder of OHNOLOGS v2 3R pair files")
+    cpb.add_argument("--out", default=None, help="default: ~/share/compare_published_<version>_<timestamp>")
+    cpb.set_defaults(func=_compare_published)
     ct = sub.add_parser("compare-tables", help="how many calls change between two gene tables (read-only)")
     ct.add_argument("--old", required=True, help="the earlier gene_table.<species>.tsv")
     ct.add_argument("--new", required=True, help="the later gene_table.<species>.tsv")
@@ -508,6 +541,7 @@ def main(argv=None) -> int:
     gt.add_argument("--clade-families", required=True, help="clade_split.Compara.families.tsv")
     gt.add_argument("--ohnologs", default=None, help="folder of OHNOLOGS v2 3R pair files (the published-pair check)")
     gt.add_argument("--positions", action="store_true", help="read seqid, start and gene order from the genome annotation (through the layout); needed for the synteny signal and the chromosome tables")
+    gt.add_argument("--records", default=None, help="clade_records.jsonl of `figure-pilot --all --no-figures`: lineage-aware pairing in the clades that have a teleost split")
     gt.add_argument("--species", default="Mzeb")
     gt.add_argument("--reassign", action="store_true", help="recompute the B1 categories from an older pilot table with the current logic")
     gt.add_argument("--out", default=None, help="default: ~/share/gene_table_<version>_<timestamp>")

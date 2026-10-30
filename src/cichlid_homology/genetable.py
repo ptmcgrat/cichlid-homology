@@ -89,6 +89,11 @@ COLUMN_SPEC = [
     ("published_pair", "Ohnolog", "the two zebrafish names are a published pair, or the gene is in a published pair in n of 4 species (outside check)"),
     ("partner_elsewhere", "Ohnolog", "when the partner was lost in the focal species: the other zebrafish gene(s) in the clade"),
     ("ohnolog_candidates", "Ohnolog", "when the partner is ambiguous: the focal genes of the clade on a partner chromosome, in another lineage"),
+    ("lineage", "Ohnolog", "this gene's lineage in the teleost split of its clade, from its place in the tree: A, B, outside (not under the split), or blank (no teleost split, or the gene is not in the clade node)"),
+    ("lineage_basis", "Ohnolog", "how the lineage and the pair were found: placement, or placement and the rule used to choose the pair among several genes"),
+    ("in_paralog_of", "Ohnolog", "for an extra gene of a lineage: the gene of the same lineage that is in the pair"),
+    ("duplication_class", "Ohnolog", "ohnolog (teleost genome duplication), or older than the teleost duplication when gar or reedfish carry a gene in each lineage; blank when the gene is in no pair"),
+    ("older_evidence", "Ohnolog", "which of gar and reedfish carry a gene in each lineage"),
     ("later_dup_level", "Later duplicates and out-paralogs", "teleost, percomorph or ovalentarian level of a later duplicate before the cichlids"),
     ("nearest_copy_gene", "Later duplicates and out-paralogs", "the nearest other focal copy"),
     ("nearest_copy_class", "Later duplicates and out-paralogs", "tandem adjacent, tandem near, same chromosome distant, different chromosome"),
@@ -486,7 +491,8 @@ def summarize_table(rows) -> dict:
             "pair_confidence": dict(C(r["ohnolog_confidence"] for r in rows if r["ohnolog_status"] in ("paired", SYN_RESOLVED))),
             "rel_human": dict(C(r["rel_human"] for r in rows).most_common(8)), "rel_zebrafish": dict(C(r["rel_zebrafish"] for r in rows).most_common(8)),
             "copy_vs_trend": dict(C(r["copy_vs_trend"] for r in rows)), "human_clean_tier": dict(C(r["human_clean_tier"] for r in rows)),
-            "b1_category": dict(C(r["b1_category"] for r in rows).most_common()), "out_paralog": dict(C(r["out_paralog"] for r in rows))}
+            "b1_category": dict(C(r["b1_category"] for r in rows).most_common()), "out_paralog": dict(C(r["out_paralog"] for r in rows)),
+            "duplication_class": dict(C(r["duplication_class"] for r in rows if r["duplication_class"])), "lineage": dict(C(r["lineage"] for r in rows if r["lineage"]))}
 
 
 def columns_markdown() -> str:
