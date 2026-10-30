@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.22.1 (where the outgroups fall relative to the two teleost lineages)
+- New command `outgroup-summary` (read-only, from `clade_records.jsonl`): for every clade with a teleost split that holds one of our pairs, where gar, reedfish, shark, coelacanth and the tetrapods
+  (together) are: absent, outside both lineages (the expected place), inside one lineage (with the slower or the faster one), in both lineages (a gene in each: the species carries both copies), or mixed.
+  The unit is the clade, not the gene. It also counts how many outgroup species are inside a lineage in one clade, whether those that are inside one lineage are in the same lineage, and
+  whether it goes with the quality of the pair (published or not, high, medium or low confidence). Writes `outgroup_summary.md` and `.json` and a row per clade (`outgroup_by_clade.tsv`).
+- `figure-pilot --pair-genes` takes every gene in one of our pairs; `--no-figures` writes the records only (no drawing: minutes, not hours); the records now carry `ohnolog_confidence` and
+  `published_pair` in the calls of each gene. Why: the summary needs the records of all pair clades, and until now they existed for the sample only. 236 offline tests.
+
 ## 0.22.0 (a teleost duplication is not an ancient one just because the tetrapods sit in one lineage)
 - `clade-split`: a duplication is cut as ancient only when each of its two biggest lineages carries at least `--min-outgroup-species` (default 1) species that are not teleosts (tetrapods,
   coelacanth, shark, gar, reedfish). Why: the figure pilot showed that when the tree nests all the non-teleost genes in one lineage (gnb1, stag2: the other lineage is teleost-only), the old rule

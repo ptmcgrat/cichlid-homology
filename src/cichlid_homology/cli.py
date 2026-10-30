@@ -295,7 +295,7 @@ def _figure_pilot(args) -> int:
     except ImportError:
         print("figure-pilot draws with matplotlib, which is not installed here: `pip install matplotlib` (or `conda install matplotlib`), then run it again.")
         return 2
-    from .figpilot import run_figure_pilot, select_genes, _read_tsv
+    from .figpilot import pair_genes, run_figure_pilot, select_genes, _read_tsv
     from .master import load_species_tree, newick_of
     from .read import load_family, read_tsv
     from .species import load_leaf_species
@@ -317,6 +317,8 @@ def _figure_pilot(args) -> int:
     explicit = [x.strip() for x in open(Path(args.genes).expanduser()) if x.strip()] if args.genes else []
     if args.only_genes:
         genes = [{"gene": g, "stratum": "requested"} for g in explicit if g in rows]
+    elif args.pair_genes:
+        genes = pair_genes(rows)
     elif args.all:
         genes = [{"gene": g, "stratum": "all"} for g in sorted(rows) if rows[g].get("family") not in ("", "NoHit")]
     else:
@@ -325,11 +327,23 @@ def _figure_pilot(args) -> int:
     summary = run_figure_pilot(genes=genes, rows=rows, prepared=prepared, froot=froot, placement=placement, prefixes=prefixes, load_family=load_family,
                                load_ls=lambda names: load_leaf_species(layout, "Compara", only=names), st=st, clades=clades, master_newick=newick_of(load_master_tree()), out_dir=out,
                                dump=Path(args.dump).expanduser() if args.dump else None, workers=args.workers, dpi=args.dpi, fmt=args.format,
-                               progress=lambda m: print(m, flush=True), min_outgroup=args.min_outgroup_species)
+                               progress=lambda m: print(m, flush=True), min_outgroup=args.min_outgroup_species, render=not args.no_figures)
     print(json.dumps({k: v for k, v in summary.items() if k not in ("errors", "figure_errors")}, indent=1, default=str))
     if summary["errors"] or summary["figure_errors"]:
         print(f"{len(summary['errors'])} family errors and {len(summary['figure_errors'])} figure errors: see {out / 'figure_pilot.json'}")
     print(f"\nwritten to {out}\nopen {out / 'figure_index.html'}")
+    return 0
+
+
+def _outgroup_summary(args) -> int:
+    """Where gar, reedfish, shark, coelacanth and the tetrapods fall relative to the two teleost lineages of our pairs (read-only, from clade_records.jsonl)."""
+    from . import outgroups as O
+
+    recs = [json.loads(l) for l in open(Path(args.records).expanduser()) if l.strip()]
+    out = Path(args.out).expanduser() if args.out else default_out("outgroup_summary")
+    s = O.write_outputs(out, recs, pairs_only=not args.all_splits)
+    print(O.report_text(s))
+    print(f"\nwritten to {out}")
     return 0
 
 
@@ -467,12 +481,19 @@ def main(argv=None) -> int:
     fp.add_argument("--genes", default=None, help="a file of gene ids to add (one per line)")
     fp.add_argument("--only-genes", action="store_true", help="draw only the genes of --genes")
     fp.add_argument("--all", action="store_true", help="every gene of the table")
+    fp.add_argument("--pair-genes", action="store_true", help="every gene that is in one of our pairs (for `outgroup-summary`)")
+    fp.add_argument("--no-figures", action="store_true", help="write the records only: much faster, and enough for `outgroup-summary`")
     fp.add_argument("--seed", type=int, default=1)
     fp.add_argument("--workers", type=int, default=1, help="processes for drawing")
     fp.add_argument("--dpi", type=int, default=110)
     fp.add_argument("--format", default="png", choices=("png", "svg"))
     fp.add_argument("--out", default=None, help="default: ~/share/figure_pilot_<version>_<timestamp>")
     fp.set_defaults(func=_figure_pilot)
+    og = sub.add_parser("outgroup-summary", help="where the outgroups fall relative to the two teleost lineages (from clade_records.jsonl; read-only)")
+    og.add_argument("--records", required=True, help="clade_records.jsonl of `figure-pilot`")
+    og.add_argument("--all-splits", action="store_true", help="every clade with a teleost split, not only those that hold one of our pairs")
+    og.add_argument("--out", default=None, help="default: ~/share/outgroup_summary_<version>_<timestamp>")
+    og.set_defaults(func=_outgroup_summary)
     ct = sub.add_parser("compare-tables", help="how many calls change between two gene tables (read-only)")
     ct.add_argument("--old", required=True, help="the earlier gene_table.<species>.tsv")
     ct.add_argument("--new", required=True, help="the later gene_table.<species>.tsv")

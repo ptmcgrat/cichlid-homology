@@ -26,7 +26,7 @@ from .suppmap import attach_support, reroot_like
 from .tree import Node, leaves, parse_newick, postorder
 
 PAIR_STATUSES = ("paired", "paired (resolved by synteny)", "pair retained in few teleosts (synteny-supported)", "possible pair (the other teleosts lost a copy)")
-CALL_COLS = ("symbol", "b1_category", "b1_confidence", "ohnolog_status", "ohnolog_symbol", "human_symbol", "zebrafish_symbol", "clade_type", "teleost_trend", "rel_human", "rel_zebrafish")
+CALL_COLS = ("symbol", "b1_category", "b1_confidence", "ohnolog_status", "ohnolog_confidence", "published_pair", "ohnolog_symbol", "human_symbol", "zebrafish_symbol", "clade_type", "teleost_trend", "rel_human", "rel_zebrafish")
 
 STRATA = {
     "published_pair": "a high-confidence pair that matches a published pair",
@@ -65,6 +65,11 @@ def ab_pairs(rows: dict) -> list:
             if rows[a].get("ohnolog_status") == rows[b].get("ohnolog_status") == "single copy (duplicate lost)":
                 out.append((a, b))
     return out
+
+
+def pair_genes(rows: dict) -> list:
+    """Every gene that is in one of our pairs (firm, retained or possible), for a run over all the pair clades."""
+    return [{"gene": g, "stratum": "pair"} for g in sorted(rows) if rows[g].get("ohnolog_status") in PAIR_STATUSES and rows[g].get("family") not in ("", "NoHit", None)]
 
 
 def select_genes(rows: dict, per_stratum: int = 10, seed: int = 1, placement: dict | None = None, explicit=None) -> list:
@@ -159,7 +164,7 @@ def _read_tsv(path) -> list:
 
 
 def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dict, prefixes: set, load_family, load_ls, st, clades, master_newick: str, out_dir, dump=None,
-                     workers: int = 1, dpi: int = 110, fmt: str = "png", method: str = "Compara", progress=print, min_outgroup: int = 1) -> dict:
+                     workers: int = 1, dpi: int = 110, fmt: str = "png", method: str = "Compara", progress=print, min_outgroup: int = 1, render: bool = True) -> dict:
     """`genes`: [{gene, stratum}]; `rows`: the gene table by gene_id; `prepared`: the folder with the reference trees; `froot`: the folder of the family folders of the method;
     `load_family(folder, prefixes, family_id)`; `load_ls(names)` returns the leaf-to-species table for those leaf names."""
     t0 = time.time()
@@ -283,16 +288,20 @@ def run_figure_pilot(*, genes: list, rows: dict, prepared, froot, placement: dic
     with open(out_dir / "clade_records.jsonl", "w") as fh:
         for rec in records:
             fh.write(json.dumps(rec, separators=(",", ":")) + "\n")
-    progress(f"rendering {len(jobs)} figures with {workers} worker(s) ...")
-    results = render_many(jobs, workers, dpi, fmt)
+    if render:
+        progress(f"rendering {len(jobs)} figures with {workers} worker(s) ...")
+        results = render_many(jobs, workers, dpi, fmt)
+    else:
+        progress(f"{len(records)} records written; no figures drawn")
+        results = [(str(p), None) for _r, p in jobs]
     bad = [r for r in results if r[1]]
     summary["figure_errors"] = bad[:20]
-    _write_index(out_dir, index, rows, summary)
+    _write_index(out_dir, index, rows, summary, render)
     flags = collections.Counter(f for r in records for f in r["flags"])
     summary["tally"] = tally(records)
     summary["strata"] = strata_summary(index)
     summary["min_outgroup_species"] = min_outgroup
-    summary.update(clades=len(records), figures=len(results) - len(bad), flags=dict(flags), modes=dict(collections.Counter(r["mode"] for r in records)),
+    summary.update(clades=len(records), figures=(len(results) - len(bad)) if render else 0, flags=dict(flags), modes=dict(collections.Counter(r["mode"] for r in records)),
                    splits=dict(collections.Counter((r["split"] or {}).get("kind", "none") for r in records)), seconds=round(time.time() - t0, 1))
     summary["skipped"] = dict(summary["skipped"])
     (out_dir / "figure_pilot.json").write_text(json.dumps(summary, indent=1, default=str))
@@ -361,7 +370,7 @@ def strata_summary(index: list) -> dict:
     return {k: dict(v) for k, v in out.items()}
 
 
-def _write_index(out_dir: Path, index: list, rows: dict, summary: dict):
+def _write_index(out_dir: Path, index: list, rows: dict, summary: dict, render: bool = True):
     with open(out_dir / "figure_index.tsv", "w", newline="") as fh:
         w = csv.writer(fh, delimiter="\t")
         w.writerow(["gene_id", "symbol", "stratum", "family", "clade", "mode", "split_kind", "overlap", "split_support", "weakest_crown", "outgroup_inside", "stem_ratio", "deep_order_score", "flags", "figure"])
@@ -369,6 +378,8 @@ def _write_index(out_dir: Path, index: list, rows: dict, summary: dict):
             r, t = x["record"], x["record"]["triage"]
             w.writerow([x["gene"], rows.get(x["gene"], {}).get("symbol", ""), x["stratum"], x["family"], x["clade"], r["mode"], (r["split"] or {}).get("kind", ""), t["overlap"], t["split_support"],
                         t["weakest_crown"], t["outgroup_inside"], t["stem_ratio"], t.get("deep_order_score"), ",".join(r["flags"]), x["figure"]])
+    if not render:
+        return
     parts = ["<html><head><meta charset='utf-8'><title>Figure pilot</title><style>body{font:14px sans-serif;margin:20px}table{border-collapse:collapse}td{border:1px solid #ccc;padding:6px;vertical-align:top}"
              "img{width:560px}h2{margin-top:28px}.f{color:#b00020}.m{color:#666}</style></head><body><h1>Figure pilot (Compara)</h1>"]
     by = collections.defaultdict(list)

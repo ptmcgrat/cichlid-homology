@@ -59,7 +59,7 @@ def test_a_clade_is_found_by_its_reference_leaves_and_a_placed_gene_does_not_mak
     assert not exact
 
 
-def build(tmp, with_dump=True, workers=1):
+def build(tmp, with_dump=True, workers=1, render=True):
     prepared = tmp / "prepared"
     (prepared / "trees").mkdir(parents=True)
     (prepared / "trees" / "F1.nhx").write_text(REF)
@@ -80,7 +80,7 @@ def build(tmp, with_dump=True, workers=1):
     genes = [{"gene": "Mzeb_1", "stratum": "published_pair"}, {"gene": "Mzeb_2", "stratum": "published_pair"}]
     out = tmp / "out"
     summary = figpilot.run_figure_pilot(genes=genes, rows=rows, prepared=prepared, froot=froot, placement=placement, prefixes={"Mzeb", "Acal"}, load_family=load_family, load_ls=lambda names: LS(),
-                                        st=st(), clades=Clades(), master_newick=SPECIES_TREE, out_dir=out, dump=dump, workers=workers, dpi=60, progress=lambda m: None)
+                                        st=st(), clades=Clades(), master_newick=SPECIES_TREE, out_dir=out, dump=dump, workers=workers, dpi=60, progress=lambda m: None, render=render)
     return summary, out
 
 
@@ -151,3 +151,11 @@ def test_a_gene_placed_above_its_clade_is_drawn_on_the_stem(tmp_path):
     rec["genes"].append({"gene": "Mzeb_9", "species": "maylandia_zebra", "lineage": "outside the clade", "lwr": "0.7", "status": "placed", "n_placements": 2, "calls": {"symbol": "geneZ"}})
     from cichlid_homology.figrender import render_record
     assert render_record(rec, tmp_path / "x.png", dpi=50).stat().st_size > 3000
+
+
+def test_records_only_mode_writes_the_records_and_no_figures(tmp_path):
+    summary, out = build(tmp_path, render=False)
+    assert summary["clades"] == 1 and summary["figures"] == 0 and (out / "clade_records.jsonl").exists() and not (out / "figures" / "F1_G1.png").exists()
+    assert not (out / "figure_index.html").exists() and (out / "figure_index.tsv").exists()
+    rec = json.loads((out / "clade_records.jsonl").read_text().splitlines()[0])
+    assert "ohnolog_confidence" in rec["genes"][0]["calls"] and "published_pair" in rec["genes"][0]["calls"]
