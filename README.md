@@ -39,3 +39,7 @@ The report has a section on lost duplicates and retained ohnologs scored by pars
 0.2.x: pilot code (rooting, relationships, dating, method comparison), tested offline, not yet run on
 real data. The call-table schema is a draft (`docs/call_table_schema.md`); nothing is written to
 `Results/v1/Homology/` except scratch files under `native/calls/pilot`, which are not pushed.
+
+### Alignment units (0.24.0)
+
+`cichlid-homology alignment-units --gene-table gene_table.Mzeb.tsv [--pairs duplicate_pairs_by_location.tsv] --prepared $P` lists, for each gene and pair, the genes of the smallest clade of the family tree that holds a human gene (else a tetrapod gene, else the whole family). See `docs/alignment_units.md`.

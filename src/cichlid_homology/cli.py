@@ -355,6 +355,75 @@ def _outgroup_summary(args) -> int:
     return 0
 
 
+def _alignment_units(args) -> int:
+    """For each gene and pair of genes: the smallest clade of the family tree that holds a human gene (else a tetrapod gene, else the whole family), with all its genes (read-only)."""
+    from cichlid_data import Catalog, get_layout
+    from cichlid_data.clades import Clades
+
+    from . import alignunits as AU
+    from .dating import level_of_species
+    from .famsurvey import NAMES, reference_files
+    from .figpilot import _read_tsv
+    from .lineagepairs import FIRM, OLDER, POSSIBLE
+    from .master import load_species_tree
+    from .read import load_family
+    from .rooting import root_tree
+    from .species import load_leaf_species
+    from .suppmap import reroot_like
+    from .tree import leaves, parse_newick
+
+    layout = get_layout()
+    cat, clades, st = Catalog.load(layout), Clades.load(), load_species_tree()
+    prefixes = {x.prefix for x in cat.species(release="v1")}
+    rows = {r["gene_id"]: r for r in _read_tsv(Path(args.gene_table).expanduser())}
+    if args.pairs:
+        pairs = [{"gene_a": r["gene_a"], "gene_b": r["gene_b"], "group": r.get("group", "")} for r in _read_tsv(Path(args.pairs).expanduser())]
+    else:                                                                # the ohnolog pairs of the gene table
+        seen, pairs = set(), []
+        for g, r in rows.items():
+            o = r.get("ohnolog_gene")
+            if o and o in rows and r["ohnolog_status"] in FIRM + (POSSIBLE, OLDER) and frozenset((g, o)) not in seen:
+                seen.add(frozenset((g, o)))
+                pairs.append({"gene_a": g, "gene_b": o, "group": "older duplicate pairs" if r["ohnolog_status"] == OLDER else "ohnolog pairs"})
+    res = layout.results("v1", "Compara")
+    froot = res.family("X").local.parent
+    if args.prepared:
+        prepared = Path(args.prepared).expanduser()
+    else:
+        fr = layout.family_resource("Compara116")
+        prepared = Path(getattr(fr, "local", fr)) / "prepared"
+    ref_files, _ = reference_files(prepared / "trees")
+    human, coel = NAMES["human"], NAMES["coelacanth"]
+
+    def is_tetrapod(sp):
+        try:
+            return clades.lineage(sp) == "sarcopterygian" and sp != coel
+        except Exception:
+            return False
+
+    def rooter(fam, f, ref_text, ls):
+        root = parse_newick(f.tree)
+        for x in leaves(root):
+            x.sp = ls.species(x.name)
+        if ref_text is not None and f.tree_mode == "place":
+            rr = reroot_like(root, parse_newick(ref_text))
+            if rr is not None:
+                return rr, "like the reference root"
+        r = root_tree(root, st, f.rooted, k=1)
+        return r.roots[0], r.how
+
+    out = Path(args.out).expanduser() if args.out else default_out("alignment_units")
+    print(f"{len(rows)} genes, {len(pairs)} pairs; family folders under {froot}", flush=True)
+    summ = AU.run_units(rows=rows, pairs=pairs, froot=froot, ref_files=ref_files, prefixes=prefixes, focal_prefix=args.species, load_family=load_family,
+                        load_ls=lambda names: load_leaf_species(layout, "Compara", only=names), rooter=rooter, clades_info=(lambda sp: sp == human, is_tetrapod, lambda sp: level_of_species(clades, sp)),
+                        out_dir=out, progress=lambda m: print(m, flush=True), limit=args.limit)
+    print(AU.report_text(summ, len(pairs)))
+    if summ["errors"]:
+        print(f"{len(summ['errors'])} family errors: see {out / 'alignment_units.json'}")
+    print(f"\nwritten to {out}")
+    return 0
+
+
 def _compare_published(args) -> int:
     """Our pairs against the published zebrafish pairs (OHNOLOGS v2): recall by level and precision (read-only)."""
     from . import published as PB
@@ -521,6 +590,14 @@ def main(argv=None) -> int:
     og.add_argument("--all-splits", action="store_true", help="every clade with a teleost split, not only those that hold one of our pairs")
     og.add_argument("--out", default=None, help="default: ~/share/outgroup_summary_<version>_<timestamp>")
     og.set_defaults(func=_outgroup_summary)
+    au = sub.add_parser("alignment-units", help="for each gene and pair: the smallest clade of the family tree with a human gene (else a tetrapod gene, else the whole family) and all its genes (read-only)")
+    au.add_argument("--gene-table", required=True, help="gene_table.<species>.tsv")
+    au.add_argument("--pairs", default=None, help="a table with gene_a and gene_b (and group), e.g. duplicate_pairs_by_location.tsv; default: the ohnolog pairs of the gene table")
+    au.add_argument("--prepared", default=None, help="the folder of the prepared reference trees (the root of the reference tree roots the placed tree)")
+    au.add_argument("--species", default="Mzeb", help="the focal species prefix")
+    au.add_argument("--limit", type=int, default=0, help="read only the first n families (a test run)")
+    au.add_argument("--out", default=None, help="default: ~/share/alignment_units_<version>_<timestamp>")
+    au.set_defaults(func=_alignment_units)
     cpb = sub.add_parser("compare-published", help="our pairs against the published zebrafish pairs (OHNOLOGS v2): recall and precision (read-only)")
     cpb.add_argument("--gene-table", required=True, help="gene_table.<species>.tsv")
     cpb.add_argument("--old", default=None, help="an earlier gene table, to put before and after side by side")

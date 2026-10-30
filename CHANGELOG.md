@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.24.0 (alignment units)
+- New command `alignment-units`: for each gene of the gene table and each pair of genes (the ohnolog pairs of the table, or any table with `gene_a` and `gene_b`), the **smallest clade of the family tree that
+  holds a human gene**; when the family has no human gene, the smallest clade that holds a tetrapod gene; when it has neither, the whole family. The tree is the family tree with our genes in it, rooted as
+  the clade split roots it (like the reference root, else by reconciliation). Writes `alignment_units.tsv` (one row per unit, with its size, species, human and focal genes and the path of `combined.aln`),
+  `alignment_unit_members.tsv.gz` (every leaf of every unit: gene, species, focal/project/reference, ladder level, human, tetrapod, shadowed reference), `gene_to_unit.tsv`, `pair_to_unit.tsv`, a summary.
+  The leaf names are the names of the alignment rows of the family, so a unit is a list of rows of `combined.aln`; which column is which residue is project 4's. 8 offline tests.
+
 ## 0.23.0 (lineage-aware pairing; older duplicates are not teleost ohnologs)
 - `lineagepairs.py` and `gene-table --records clade_records.jsonl` (the records of `figure-pilot --all --no-figures`): in a clade that has a teleost split, our genes take the lineage of their place
   in the tree (A or B), and the pair is the cross-lineage combination whose chromosome pair carries most of our other firm pairs (at least `synteny_min_pairs`); ties are broken by the zebrafish gene that
